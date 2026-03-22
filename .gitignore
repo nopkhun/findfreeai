@@ -1,0 +1,5 @@
+.env
+api_keys.json
+*.log
+free_ai_apis.json
+__pycache__/
