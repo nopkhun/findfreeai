@@ -1,7 +1,8 @@
 FROM python:3.12-slim
 
 WORKDIR /app
-COPY app.py proxy.py ./
+COPY app.py proxy.py summarizer.py skill_engine.py rag_memory.py ./
+RUN mkdir -p /app/data/conversations
 
 ENV PYTHONIOENCODING=utf-8
 ENV PYTHONUNBUFFERED=1

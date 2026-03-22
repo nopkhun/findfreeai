@@ -19,6 +19,10 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.request import urlopen, Request
 from urllib.error import URLError, HTTPError
 
+from summarizer import detect_query_type
+from skill_engine import record_call, get_best_providers_for_type, classify_error, get_skill_summary, recompute_routing
+from rag_memory import get_session_id_from_request, get_context_for_request, append_message, list_sessions, get_or_create_session, delete_session, cleanup_old_sessions
+
 if sys.stdout.encoding != "utf-8":
     sys.stdout.reconfigure(encoding="utf-8")
     sys.stderr.reconfigure(encoding="utf-8")
@@ -321,24 +325,53 @@ def resolve_provider_model(model_str):
 
 # ==================== FORWARD REQUEST ====================
 
-def forward_chat(body_bytes, model_override=""):
-    """Forward chat completion request with failover"""
+def forward_chat(body_bytes, model_override="", request_headers=None):
+    """Forward chat completion request with failover + RAG + Skill"""
     try:
         data = json.loads(body_bytes)
     except Exception:
         return 400, json.dumps({"error": {"message": "Invalid JSON"}})
 
     original_model = model_override or data.get("model", "")
+    messages = data.get("messages", [])
+
+    # === RAG: inject context จาก session ===
+    session_id = get_session_id_from_request(request_headers or {}, messages)
+    last_user_msg = ""
+    for m in reversed(messages):
+        if m.get("role") == "user":
+            last_user_msg = m["content"]
+            break
+
+    # Inject context (summary + recent history)
+    if session_id != "default":
+        data["messages"] = get_context_for_request(session_id, messages)
+
+    # Save user message to session
+    if last_user_msg:
+        append_message(session_id, "user", last_user_msg)
+
+    # === Skill: detect query type + smart routing ===
+    query_type = detect_query_type(last_user_msg) if last_user_msg else "chat"
+
     targets = resolve_provider_model(original_model)
 
     if not targets:
         return 503, json.dumps({
             "error": {
-                "message": "ไม่มี provider พร้อมใช้! ใส่ API key ในไฟล์ .env ก่อน",
+                "message": "ไม่มี provider พร้อมใช้! ใส่ API key ใน api_keys.json ก่อน",
                 "type": "no_providers",
                 "help": "ดูวิธีสมัครที่ http://127.0.0.1:8899 แท็บ 'วิธีสมัคร Key'",
             }
         })
+
+    # Reorder by learned skill (ถ้ามีข้อมูลเพียงพอ)
+    best_order = get_best_providers_for_type(query_type)
+    if best_order:
+        def sort_key(t):
+            pid = t[0]["id"]
+            return best_order.index(pid) if pid in best_order else 999
+        targets.sort(key=sort_key)
 
     max_tries = min(active_config.get("max_retries", 3), len(targets))
     last_err = ""
@@ -370,18 +403,25 @@ def forward_chat(body_bytes, model_override=""):
                 resp_body = resp.read().decode("utf-8")
 
                 record_ok(pid, latency)
+                record_call(pid, query_type, latency, True)
                 add_request_log(provider["name"], model, "ok", latency)
-                log.info(f"  ✅ {provider['name']} {latency}ms")
+                log.info(f"  ✅ {provider['name']} {latency}ms [{query_type}]")
 
-                # Inject proxy metadata
+                # Save assistant response to RAG session
                 try:
                     resp_data = json.loads(resp_body)
+                    ai_content = resp_data.get("choices", [{}])[0].get("message", {}).get("content", "")
+                    if ai_content and session_id != "default":
+                        append_message(session_id, "assistant", ai_content, provider=pid)
+
                     resp_data["_proxy"] = {
                         "provider": provider["name"],
                         "provider_id": pid,
                         "model": model,
                         "latency_ms": latency,
                         "attempt": i + 1,
+                        "query_type": query_type,
+                        "session_id": session_id,
                     }
                     resp_body = json.dumps(resp_data, ensure_ascii=False)
                 except Exception:
@@ -392,7 +432,9 @@ def forward_chat(body_bytes, model_override=""):
         except HTTPError as e:
             latency = round((time.time() - start) * 1000)
             last_err = f"HTTP {e.code}: {e.reason}"
+            err_type = classify_error(e.code, last_err)
             record_fail(pid, last_err)
+            record_call(pid, query_type, latency, False, err_type)
             add_request_log(provider["name"], model, "fail", latency, last_err)
             log.warning(f"  ❌ {provider['name']}: {last_err}")
             continue
@@ -400,7 +442,9 @@ def forward_chat(body_bytes, model_override=""):
         except Exception as e:
             latency = round((time.time() - start) * 1000)
             last_err = str(e)[:100]
+            err_type = classify_error(0, last_err)
             record_fail(pid, last_err)
+            record_call(pid, query_type, latency, False, err_type)
             add_request_log(provider["name"], model, "fail", latency, last_err)
             log.warning(f"  ❌ {provider['name']}: {last_err}")
             continue
@@ -460,12 +504,20 @@ class ProxyHandler(BaseHTTPRequestHandler):
             self._json(200, request_log[-100:])
 
         elif self.path.startswith("/v1/keys"):
-            # แสดง keys ที่มี (ซ่อน value แสดงแค่ prefix)
             keys = load_keys()
-            safe = {}
-            for k, v in keys.items():
-                safe[k] = v[:8] + "..." if len(v) > 8 else "***"
+            safe = {k: (v[:8] + "..." if len(v) > 8 else "***") for k, v in keys.items()}
             self._json(200, {"keys": safe, "count": len(keys)})
+
+        elif self.path.startswith("/v1/rag/sessions"):
+            self._json(200, {"sessions": list_sessions()})
+
+        elif self.path.startswith("/v1/rag/skills"):
+            self._json(200, get_skill_summary())
+
+        elif self.path.startswith("/v1/rag/session/"):
+            sid = self.path.split("/v1/rag/session/")[1]
+            session = get_or_create_session(sid)
+            self._json(200, session)
 
         else:
             self._json(404, {"error": "not found"})
@@ -475,7 +527,7 @@ class ProxyHandler(BaseHTTPRequestHandler):
         body = self.rfile.read(cl) if cl > 0 else b""
 
         if self.path == "/v1/chat/completions":
-            status, resp = forward_chat(body)
+            status, resp = forward_chat(body, request_headers=dict(self.headers))
             self._raw(status, resp)
 
         elif self.path == "/v1/config":
@@ -488,7 +540,7 @@ class ProxyHandler(BaseHTTPRequestHandler):
                 self._json(400, {"error": str(e)})
 
         elif self.path == "/v1/completions":
-            status, resp = forward_chat(body)
+            status, resp = forward_chat(body, request_headers=dict(self.headers))
             self._raw(status, resp)
 
         elif self.path == "/v1/keys":
