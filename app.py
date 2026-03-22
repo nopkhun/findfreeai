@@ -1048,33 +1048,38 @@ function scoreColor(s) { return s>=80?'var(--green)':s>=60?'var(--yellow)':s>=40
 function gradeClass(g) { if(!g)return'g-f'; return g.startsWith('A')?'g-a':g==='B'?'g-b':g==='C'?'g-c':g==='D'?'g-d':'g-f'; }
 
 async function startScan() {
-  const btn = document.getElementById('startBtn');
-  btn.disabled = true; btn.textContent = '⏳ กำลังค้นหา...'; btn.classList.add('scanning');
+  fetch('/api/scan', {method:'POST'});
+  document.getElementById('startBtn').textContent = '⏳ กำลังค้นหา...';
+  document.getElementById('startBtn').classList.add('scanning');
   document.getElementById('startDesc').textContent = 'กำลังค้นหา... ดู log ด้านล่าง';
-  try { await fetch('/api/scan', {method:'POST'}); } catch(e) {}
-  btn.disabled = false; btn.textContent = '🔍 เริ่มค้นหาอีกครั้ง'; btn.classList.remove('scanning');
-  document.getElementById('startDesc').textContent = 'ค้นหาเสร็จแล้ว!';
-  pollData();
 }
-
 async function runBrain() {
-  const btn = document.getElementById('brainBtn');
-  btn.disabled = true; btn.textContent = '⏳ AI กำลังวิเคราะห์...'; btn.classList.add('scanning');
-  document.getElementById('startDesc').textContent = 'AI กำลังวิเคราะห์... ดูผลในแท็บ 🧠 AI วิเคราะห์';
-  try { await fetch('/api/brain', {method:'POST'}); } catch(e) {}
-  btn.disabled = false; btn.textContent = '🧠 AI วิเคราะห์'; btn.classList.remove('scanning');
-  document.getElementById('startDesc').textContent = 'วิเคราะห์เสร็จแล้ว! ดูผลในแท็บ 🧠 AI วิเคราะห์';
-  pollBrain();
+  fetch('/api/brain', {method:'POST'});
+  document.getElementById('brainBtn').textContent = '⏳ AI กำลังวิเคราะห์...';
+  document.getElementById('brainBtn').classList.add('scanning');
+  document.getElementById('startDesc').textContent = 'AI กำลังวิเคราะห์... ดู log ด้านล่าง + แท็บ 🧠';
 }
-
 async function testKeys() {
-  const btn = document.getElementById('testKeysBtn');
-  btn.disabled = true; btn.textContent = '⏳ กำลังทดสอบ Key...'; btn.classList.add('scanning');
-  document.getElementById('startDesc').textContent = 'กำลังทดสอบ API Key ที่มีใน api_keys.json... ดู log ด้านล่าง';
-  try { await fetch('/api/test-keys', {method:'POST'}); } catch(e) {}
-  btn.disabled = false; btn.textContent = '🔑 ทดสอบ API Key'; btn.classList.remove('scanning');
-  document.getElementById('startDesc').textContent = 'ทดสอบ Key เสร็จแล้ว! ดูผลในตาราง';
-  pollData();
+  fetch('/api/test-keys', {method:'POST'});
+  document.getElementById('testKeysBtn').textContent = '⏳ กำลังทดสอบ...';
+  document.getElementById('testKeysBtn').classList.add('scanning');
+  document.getElementById('startDesc').textContent = 'กำลังทดสอบ API Key... ดู log ด้านล่าง';
+}
+// Auto-reset buttons when scan finishes
+async function checkStatus() {
+  try {
+    const r = await fetch('/api/status?'+Date.now());
+    if(!r.ok) return;
+    const d = await r.json();
+    if(!d.scanning) {
+      const b1 = document.getElementById('startBtn');
+      const b2 = document.getElementById('testKeysBtn');
+      const b3 = document.getElementById('brainBtn');
+      if(b1.classList.contains('scanning')) { b1.textContent='🔍 เริ่มค้นหา AI ฟรี'; b1.classList.remove('scanning'); pollData(); }
+      if(b2.classList.contains('scanning')) { b2.textContent='🔑 ทดสอบ API Key'; b2.classList.remove('scanning'); pollData(); }
+      if(b3.classList.contains('scanning')) { b3.textContent='🧠 AI วิเคราะห์'; b3.classList.remove('scanning'); pollBrain(); }
+    }
+  } catch(e){}
 }
 
 async function pollLogs() {
@@ -1275,10 +1280,11 @@ async function pollBrain() {
   } catch(e) {}
 }
 
-// Poll every 2 seconds
-setInterval(pollLogs, 2000);
+// Poll
+setInterval(pollLogs, 1500);
 setInterval(pollData, 5000);
 setInterval(pollBrain, 3000);
+setInterval(checkStatus, 2000);
 pollData();
 </script>
 </body>
@@ -1447,30 +1453,30 @@ class Handler(BaseHTTPRequestHandler):
             if is_scanning:
                 self._json({"status": "already_scanning"})
                 return
-            scan_thread = threading.Thread(target=run_full_scan, daemon=True)
-            scan_thread.start()
-            scan_thread.join()
-            self._json({"status": "done"})
+            threading.Thread(target=run_full_scan, daemon=True).start()
+            self._json({"status": "started"})
         elif self.path == "/api/test-keys":
             if is_scanning:
                 self._json({"status": "busy"})
                 return
-            is_scanning = True
-            try:
-                results = test_all_keys()
-                self._json({"status": "done", "results": results})
-            finally:
-                is_scanning = False
+            def _test():
+                global is_scanning
+                is_scanning = True
+                try: test_all_keys()
+                finally: is_scanning = False
+            threading.Thread(target=_test, daemon=True).start()
+            self._json({"status": "started"})
         elif self.path == "/api/brain":
             if is_scanning:
                 self._json({"status": "busy"})
                 return
-            is_scanning = True
-            try:
-                results = run_brain_full()
-                self._json({"status": "done", "results": {k: (v[:200] if isinstance(v, str) else str(v)[:200]) for k, v in (results or {}).items()}})
-            finally:
-                is_scanning = False
+            def _brain():
+                global is_scanning
+                is_scanning = True
+                try: run_brain_full()
+                finally: is_scanning = False
+            threading.Thread(target=_brain, daemon=True).start()
+            self._json({"status": "started"})
         elif self.path == "/api/keys":
             # บันทึก API keys
             cl = int(self.headers.get("Content-Length", 0))
