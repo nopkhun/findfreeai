@@ -1,0 +1,21 @@
+services:
+  findfreeai:
+    build: .
+    container_name: findfreeai
+    restart: unless-stopped
+    ports:
+      - "8899:8899"   # Dashboard
+      - "8900:8900"   # AI Proxy (OpenAI-compatible)
+    env_file:
+      - .env
+    environment:
+      - PYTHONIOENCODING=utf-8
+      - TZ=Asia/Bangkok
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8899/', timeout=5)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

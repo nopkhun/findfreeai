@@ -23,7 +23,7 @@ if sys.stdout.encoding != "utf-8":
     sys.stdout.reconfigure(encoding="utf-8")
     sys.stderr.reconfigure(encoding="utf-8")
 
-PROXY_HOST = "127.0.0.1"
+PROXY_HOST = "0.0.0.0"
 PROXY_PORT = 8900
 JSON_FILE = "free_ai_apis.json"
 CONFIG_FILE = "proxy_config.json"

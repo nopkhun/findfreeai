@@ -20,7 +20,7 @@ if sys.stdout.encoding != "utf-8":
     sys.stdout.reconfigure(encoding="utf-8")
     sys.stderr.reconfigure(encoding="utf-8")
 
-HOST = "127.0.0.1"
+HOST = "0.0.0.0"
 PORT = 8899
 JSON_FILE = "free_ai_apis.json"
 REQUEST_TIMEOUT = 15
@@ -766,7 +766,8 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   <div class="tab-content active" id="tab-main">
     <div class="start-section">
       <button class="start-btn" id="startBtn" onclick="startScan()">🔍 เริ่มค้นหา AI API ฟรี</button>
-      <div class="start-desc" id="startDesc">กดปุ่มเพื่อเริ่มสแกนหาแหล่ง AI API ฟรีทั้ง Internet</div>
+      <button class="start-btn" id="testKeysBtn" onclick="testKeys()" style="margin-left:16px;background:linear-gradient(135deg, var(--green), #1a7f37);font-size:18px;padding:14px 36px;">🔑 ทดสอบ API Key</button>
+      <div class="start-desc" id="startDesc">กดปุ่มซ้ายเพื่อสแกนหา AI ฟรี | กดปุ่มขวาเพื่อทดสอบ Key ที่สมัครมาว่าใช้ได้จริงหรือไม่</div>
     </div>
     <div class="stats-bar" id="statsBar">
       <div class="stat-card"><div class="label">API ที่รู้จัก</div><div class="value" style="color:var(--accent)" id="sKnown">-</div></div>
@@ -1023,7 +1024,18 @@ async function startScan() {
   document.getElementById('startDesc').textContent = 'กำลังค้นหา... ดู log ด้านล่าง';
   try { await fetch('/api/scan', {method:'POST'}); } catch(e) {}
   btn.disabled = false; btn.textContent = '🔍 เริ่มค้นหาอีกครั้ง'; btn.classList.remove('scanning');
-  document.getElementById('startDesc').textContent = 'ค้นหาเสร็จแล้ว! กดอีกครั้งเพื่อค้นหาใหม่';
+  document.getElementById('startDesc').textContent = 'ค้นหาเสร็จแล้ว!';
+  pollData();
+}
+
+async function testKeys() {
+  const btn = document.getElementById('testKeysBtn');
+  btn.disabled = true; btn.textContent = '⏳ กำลังทดสอบ Key...'; btn.classList.add('scanning');
+  document.getElementById('startDesc').textContent = 'กำลังทดสอบ API Key ที่มีในไฟล์ .env... ดู log ด้านล่าง';
+  try { await fetch('/api/test-keys', {method:'POST'}); } catch(e) {}
+  btn.disabled = false; btn.textContent = '🔑 ทดสอบ API Key'; btn.classList.remove('scanning');
+  document.getElementById('startDesc').textContent = 'ทดสอบ Key เสร็จแล้ว! ดูผลในตาราง';
+  pollData();
 }
 
 async function pollLogs() {
@@ -1215,10 +1227,9 @@ AUTO_FREE_INFO = {
 
 # Auto-free / community models
 KILO_KIRO_INFO = """
-🔍 ข้อมูลเกี่ยวกับ Kilo / Kiro / Auto-Free:
+💡 OpenRouter Auto-Free:
 • OpenRouter มี "free" models — ชื่อลงท้ายด้วย :free เช่น meta-llama/llama-3-8b-instruct:free
-• Kilo AI (kilo.health) — เป็น health AI ไม่ใช่ free LLM API
-• Kiro (Amazon) — เป็น IDE ของ AWS ไม่ใช่ free API
+• ใช้ได้ฟรีถาวร ไม่มีค่าใช้จ่าย
 • สรุป: ถ้าต้องการ auto-free ใช้ OpenRouter + โมเดลที่ลงท้าย :free
 """
 
@@ -1233,6 +1244,7 @@ def test_api_key(provider_name, api_base, api_key, model):
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {api_key}",
+        "User-Agent": "Mozilla/5.0 FindFreeAI/1.0",
     }
     start = time.time()
     try:
@@ -1241,10 +1253,22 @@ def test_api_key(provider_name, api_base, api_key, model):
             latency = round((time.time() - start) * 1000)
             return {"status": "ok", "latency_ms": latency, "message": f"ใช้ได้! ({latency}ms)"}
     except HTTPError as e:
+        err_body = ""
+        try:
+            err_body = e.read().decode("utf-8", errors="replace")[:200]
+        except Exception:
+            pass
         if e.code == 429:
             return {"status": "rate_limited", "message": "Key ใช้ได้ แต่ถึง rate limit แล้ว"}
-        elif e.code in (401, 403):
-            return {"status": "invalid", "message": f"Key ไม่ถูกต้องหรือหมดอายุ (HTTP {e.code})"}
+        elif e.code == 401:
+            return {"status": "invalid", "message": f"Key ไม่ถูกต้อง (HTTP 401)"}
+        elif e.code == 400:
+            # 400 = request format ไม่ถูก (เช่น Google API) แต่ key ใช้ได้
+            return {"status": "ok", "latency_ms": round((time.time()-start)*1000), "message": f"Key ใช้ได้ (API format ต่าง)"}
+        elif e.code == 403:
+            if "rate" in err_body.lower() or "limit" in err_body.lower() or "quota" in err_body.lower():
+                return {"status": "rate_limited", "message": "Key ใช้ได้ แต่ถึง rate limit/quota แล้ว"}
+            return {"status": "invalid", "message": f"Key ถูกปฏิเสธ (HTTP 403)"}
         else:
             return {"status": "error", "message": f"HTTP {e.code}: {e.reason}"}
     except Exception as e:
@@ -1304,7 +1328,9 @@ def test_all_keys():
     data["kilo_kiro_info"] = KILO_KIRO_INFO
     save_data(data)
 
-    add_log(f"🔑 ทดสอบ key เสร็จ: {sum(1 for r in results if r['has_key'])} มี key, {sum(1 for r in results if r.get('test_result',{}).get('status')=='ok')} ใช้ได้", "ok")
+    has = sum(1 for r in results if r['has_key'])
+    ok = sum(1 for r in results if (r.get('test_result') or {}).get('status') == 'ok')
+    add_log(f"🔑 ทดสอบ key เสร็จ: {has} มี key, {ok} ใช้ได้", "ok")
     return results
 
 
