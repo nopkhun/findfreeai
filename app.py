@@ -780,6 +780,18 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
       <div class="stat-card"><div class="label">GitHub Repos</div><div class="value" style="color:var(--purple)" id="sGithub">-</div></div>
       <div class="stat-card"><div class="label">โพสต์โซเชียล</div><div class="value" style="color:var(--yellow)" id="sSocial">-</div></div>
     </div>
+    <!-- ฟอร์มใส่ API Key -->
+    <div class="section">
+      <div class="section-title" style="font-size:20px;">🔑 ใส่ API Key ที่สมัครมา (แก้ไขได้ทันที)</div>
+      <div class="config-guide" style="border-left:4px solid var(--green);">
+        <div id="keyForm"></div>
+        <div style="margin-top:16px;display:flex;gap:12px;">
+          <button class="start-btn" onclick="saveKeys()" style="font-size:16px;padding:12px 28px;background:var(--green);">💾 บันทึก API Keys</button>
+          <span id="keySaveStatus" style="font-size:15px;color:var(--text2);line-height:48px;"></span>
+        </div>
+      </div>
+    </div>
+
     <!-- AI ที่ใช้ได้จริง -->
     <div class="section">
       <div class="section-title">🔑 สถานะ API Key + AI ที่ใช้ได้จริง</div>
@@ -1065,6 +1077,69 @@ async function testKeys() {
   document.getElementById('testKeysBtn').classList.add('scanning');
   document.getElementById('startDesc').textContent = 'กำลังทดสอบ API Key... ดู log ด้านล่าง';
 }
+// Key form
+const KEY_PROVIDERS = [
+  {env:'GROQ_API_KEY', name:'Groq', hint:'gsk_...', url:'https://console.groq.com/keys'},
+  {env:'GOOGLE_API_KEY', name:'Google Gemini', hint:'AIza...', url:'https://aistudio.google.com/apikey'},
+  {env:'OPENROUTER_API_KEY', name:'OpenRouter', hint:'sk-or-...', url:'https://openrouter.ai/settings/keys'},
+  {env:'CEREBRAS_API_KEY', name:'Cerebras', hint:'csk-...', url:'https://cloud.cerebras.ai/'},
+  {env:'SAMBANOVA_API_KEY', name:'SambaNova', hint:'...', url:'https://cloud.sambanova.ai/apis'},
+  {env:'NVIDIA_API_KEY', name:'NVIDIA NIM', hint:'nvapi-...', url:'https://build.nvidia.com/explore/discover'},
+  {env:'MISTRAL_API_KEY', name:'Mistral AI', hint:'...', url:'https://console.mistral.ai/api-keys/'},
+  {env:'TOGETHER_API_KEY', name:'Together AI', hint:'...', url:'https://api.together.ai/settings/api-keys'},
+  {env:'DEEPINFRA_API_KEY', name:'DeepInfra', hint:'...', url:'https://deepinfra.com/dash/api_keys'},
+  {env:'COHERE_API_KEY', name:'Cohere', hint:'...', url:'https://dashboard.cohere.com/api-keys'},
+];
+async function loadKeyForm() {
+  let existing = {};
+  try { const r = await fetch('/api/keys'); const d = await r.json(); existing = d.keys||{}; } catch(e){}
+  const form = document.getElementById('keyForm');
+  if(!form) return;
+  form.innerHTML = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">' +
+    KEY_PROVIDERS.map(p => {
+      const has = existing[p.env] ? true : false;
+      const border = has ? 'var(--green)' : 'var(--border)';
+      const icon = has ? '✅' : '⬜';
+      return `<div style="display:flex;align-items:center;gap:8px;padding:8px;border:1px solid ${border};border-radius:8px;background:var(--bg3);">
+        <span style="font-size:14px;">${icon}</span>
+        <div style="flex:1;">
+          <label style="font-size:13px;color:var(--text2);display:block;">${esc(p.name)}</label>
+          <input type="text" id="key_${p.env}" placeholder="${esc(p.hint)}"
+            value="${has ? existing[p.env] : ''}"
+            style="width:100%;padding:6px 8px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:monospace;font-size:13px;margin-top:2px;">
+        </div>
+        <a href="${esc(p.url)}" target="_blank" style="font-size:12px;white-space:nowrap;">สมัคร →</a>
+      </div>`;
+    }).join('') + '</div>';
+}
+async function saveKeys() {
+  const keys = {};
+  KEY_PROVIDERS.forEach(p => {
+    const v = document.getElementById('key_'+p.env)?.value?.trim();
+    if(v) keys[p.env] = v;
+  });
+  try {
+    await fetch('/api/keys', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(keys)});
+    document.getElementById('keySaveStatus').textContent = '✅ บันทึกแล้ว!';
+    setTimeout(()=>document.getElementById('keySaveStatus').textContent='', 3000);
+    loadKeyForm();
+  } catch(e) {
+    document.getElementById('keySaveStatus').textContent = '❌ บันทึกไม่สำเร็จ';
+  }
+}
+loadKeyForm();
+
+// Tab jump helper
+function jumpToTab(name) {
+  document.querySelectorAll('.tab').forEach(t => {
+    t.classList.remove('active');
+    if(t.textContent.includes(name)) t.classList.add('active');
+  });
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  const el = document.getElementById('tab-'+name);
+  if(el) el.classList.add('active');
+}
+
 // Auto-reset buttons when scan finishes
 async function checkStatus() {
   try {
@@ -1075,9 +1150,9 @@ async function checkStatus() {
       const b1 = document.getElementById('startBtn');
       const b2 = document.getElementById('testKeysBtn');
       const b3 = document.getElementById('brainBtn');
-      if(b1.classList.contains('scanning')) { b1.textContent='🔍 เริ่มค้นหา AI ฟรี'; b1.classList.remove('scanning'); pollData(); }
-      if(b2.classList.contains('scanning')) { b2.textContent='🔑 ทดสอบ API Key'; b2.classList.remove('scanning'); pollData(); }
-      if(b3.classList.contains('scanning')) { b3.textContent='🧠 AI วิเคราะห์'; b3.classList.remove('scanning'); pollBrain(); }
+      if(b1.classList.contains('scanning')) { b1.textContent='🔍 เริ่มค้นหา AI ฟรี'; b1.classList.remove('scanning'); pollData(); jumpToTab('tests'); }
+      if(b2.classList.contains('scanning')) { b2.textContent='🔑 ทดสอบ API Key'; b2.classList.remove('scanning'); pollData(); loadKeyForm(); jumpToTab('main'); }
+      if(b3.classList.contains('scanning')) { b3.textContent='🧠 AI วิเคราะห์'; b3.classList.remove('scanning'); pollBrain(); jumpToTab('brain'); }
     }
   } catch(e){}
 }
