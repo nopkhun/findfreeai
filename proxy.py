@@ -201,27 +201,28 @@ def add_request_log(provider, model, status, latency, error=""):
 
 
 # ==================== KEY LOADING ====================
+KEYS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "api_keys.json")
+
 def load_keys():
     keys = {}
-    # .env file
-    env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
-    if os.path.exists(env_path):
-        with open(env_path, "r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if not line or line.startswith("#"):
-                    continue
-                if "=" in line:
-                    k, v = line.split("=", 1)
-                    v = v.strip().strip('"').strip("'")
-                    if v:
-                        keys[k.strip()] = v
-    # env vars
+    # 1) จาก api_keys.json (primary)
+    if os.path.exists(KEYS_FILE):
+        try:
+            with open(KEYS_FILE, "r", encoding="utf-8") as f:
+                keys.update(json.load(f))
+        except Exception:
+            pass
+    # 2) จาก env vars (fallback)
     for pid, p in PROVIDERS.items():
         env_val = os.environ.get(p["env_key"], "")
-        if env_val:
+        if env_val and p["env_key"] not in keys:
             keys[p["env_key"]] = env_val
     return keys
+
+
+def save_keys(keys):
+    with open(KEYS_FILE, "w", encoding="utf-8") as f:
+        json.dump(keys, f, indent=2, ensure_ascii=False)
 
 
 def get_available_providers():
@@ -458,6 +459,14 @@ class ProxyHandler(BaseHTTPRequestHandler):
         elif self.path.startswith("/v1/logs"):
             self._json(200, request_log[-100:])
 
+        elif self.path.startswith("/v1/keys"):
+            # แสดง keys ที่มี (ซ่อน value แสดงแค่ prefix)
+            keys = load_keys()
+            safe = {}
+            for k, v in keys.items():
+                safe[k] = v[:8] + "..." if len(v) > 8 else "***"
+            self._json(200, {"keys": safe, "count": len(keys)})
+
         else:
             self._json(404, {"error": "not found"})
 
@@ -479,9 +488,33 @@ class ProxyHandler(BaseHTTPRequestHandler):
                 self._json(400, {"error": str(e)})
 
         elif self.path == "/v1/completions":
-            # Legacy completions → convert to chat
             status, resp = forward_chat(body)
             self._raw(status, resp)
+
+        elif self.path == "/v1/keys":
+            # บันทึก API keys ลง api_keys.json
+            try:
+                new_keys = json.loads(body)
+                existing = load_keys()
+                existing.update(new_keys)
+                # ลบ key ที่ค่าว่าง
+                existing = {k: v for k, v in existing.items() if v}
+                save_keys(existing)
+                self._json(200, {"status": "ok", "keys_count": len(existing)})
+            except Exception as e:
+                self._json(400, {"error": str(e)})
+
+        elif self.path == "/v1/keys/delete":
+            try:
+                data = json.loads(body)
+                key_name = data.get("key", "")
+                existing = load_keys()
+                if key_name in existing:
+                    del existing[key_name]
+                    save_keys(existing)
+                self._json(200, {"status": "ok"})
+            except Exception as e:
+                self._json(400, {"error": str(e)})
 
         else:
             self._json(404, {"error": "not found"})

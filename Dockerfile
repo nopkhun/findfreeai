@@ -1,7 +1,7 @@
 FROM python:3.12-slim
 
 WORKDIR /app
-COPY app.py proxy.py .env.example ./
+COPY app.py proxy.py ./
 
 ENV PYTHONIOENCODING=utf-8
 ENV PYTHONUNBUFFERED=1

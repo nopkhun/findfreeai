@@ -1275,27 +1275,39 @@ def test_api_key(provider_name, api_base, api_key, model):
         return {"status": "error", "message": str(e)[:100]}
 
 
+KEYS_JSON = os.path.join(os.path.dirname(os.path.abspath(__file__)), "api_keys.json")
+
+def load_api_keys():
+    """โหลด API keys จาก api_keys.json"""
+    keys = {}
+    if os.path.exists(KEYS_JSON):
+        try:
+            with open(KEYS_JSON, "r", encoding="utf-8") as f:
+                keys = json.load(f)
+        except Exception:
+            pass
+    # fallback: env vars
+    for src in KNOWN_SOURCES:
+        env_name = src.get("env_name", "")
+        if env_name and env_name not in keys:
+            val = os.environ.get(env_name, "")
+            if val:
+                keys[env_name] = val
+    return keys
+
+def save_api_keys(keys):
+    with open(KEYS_JSON, "w", encoding="utf-8") as f:
+        json.dump(keys, f, indent=2, ensure_ascii=False)
+
 def test_all_keys():
     """ทดสอบ API key ทั้งหมดที่มี"""
     add_log("🔑 เริ่มทดสอบ API Keys...", "test")
-    keys = {}
-    env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
-    if os.path.exists(env_path):
-        with open(env_path, "r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if not line or line.startswith("#"):
-                    continue
-                if "=" in line:
-                    k, v = line.split("=", 1)
-                    v = v.strip().strip('"').strip("'")
-                    if v:
-                        keys[k.strip()] = v
+    keys = load_api_keys()
 
     results = []
     for src in KNOWN_SOURCES:
         env_name = src.get("env_name", "")
-        key = keys.get(env_name, "") or os.environ.get(env_name, "")
+        key = keys.get(env_name, "")
         has_key = bool(key)
         test_result = None
         auto_free = AUTO_FREE_INFO.get(src["name"], "")
@@ -1345,6 +1357,10 @@ class Handler(BaseHTTPRequestHandler):
             self._json_file()
         elif self.path.startswith("/api/status"):
             self._json({"scanning": is_scanning})
+        elif self.path.startswith("/api/keys"):
+            keys = load_api_keys()
+            safe = {k: (v[:8] + "..." if len(v) > 8 else "***") for k, v in keys.items()}
+            self._json({"keys": safe, "count": len(keys)})
         else:
             self.send_error(404)
 
@@ -1368,6 +1384,20 @@ class Handler(BaseHTTPRequestHandler):
                 self._json({"status": "done", "results": results})
             finally:
                 is_scanning = False
+        elif self.path == "/api/keys":
+            # บันทึก API keys
+            cl = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(cl) if cl > 0 else b""
+            try:
+                new_keys = json.loads(body)
+                existing = load_api_keys()
+                existing.update(new_keys)
+                existing = {k: v for k, v in existing.items() if v}
+                save_api_keys(existing)
+                add_log(f"🔑 บันทึก API Keys แล้ว ({len(existing)} keys)", "ok")
+                self._json({"status": "ok", "count": len(existing)})
+            except Exception as e:
+                self._json({"error": str(e)})
         else:
             self.send_error(404)
 
