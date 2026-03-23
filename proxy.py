@@ -95,6 +95,59 @@ active_config = {
 }
 
 
+# ==================== SLIDING WINDOW + AUTO-SUMMARY ====================
+COMPACT_THRESHOLD = 20   # เริ่ม compact เมื่อ messages > N
+RECENT_KEEP = 10         # เก็บ N ข้อความล่าสุดแบบเต็ม
+summary_cache = {}       # session_id → summary string
+
+def compact_messages(messages):
+    """Sliding Window + Auto-Summary: สรุปข้อความเก่า เก็บล่าสุดเต็มๆ
+
+    ถ้า messages <= COMPACT_THRESHOLD → ส่งต่อเลย ไม่แตะ
+    ถ้า messages > COMPACT_THRESHOLD →
+      1. แยก system messages ออก (เก็บไว้)
+      2. ข้อความเก่า (ก่อน recent) → สรุปเป็น 1 system message
+      3. ข้อความล่าสุด RECENT_KEEP ข้อความ → เก็บเต็มๆ
+    """
+    # แยก system vs non-system
+    sys_msgs = [m for m in messages if m.get("role") == "system"]
+    chat_msgs = [m for m in messages if m.get("role") != "system"]
+
+    if len(chat_msgs) <= COMPACT_THRESHOLD:
+        return messages  # ยังไม่ต้อง compact
+
+    # แยกเก่า vs ใหม่
+    old_msgs = chat_msgs[:-RECENT_KEEP]
+    recent_msgs = chat_msgs[-RECENT_KEEP:]
+
+    # สรุปข้อความเก่า
+    summary_parts = []
+    for m in old_msgs:
+        role = "User" if m.get("role") == "user" else "AI"
+        content = m.get("content", "")
+        if isinstance(content, list):
+            content = " ".join(p.get("text", "") if isinstance(p, dict) else str(p) for p in content)
+        # เก็บแค่ 80 ตัวอักษรแรกของแต่ละข้อความ
+        short = str(content)[:80].replace("\n", " ")
+        if short:
+            summary_parts.append(f"- {role}: {short}")
+
+    summary_text = "\n".join(summary_parts[-20:])  # max 20 entries
+    n_old = len(old_msgs)
+    n_recent = len(recent_msgs)
+
+    log.info(f"  📦 Compact: {len(messages)} msgs → สรุป {n_old} เก่า + {n_recent} ล่าสุด")
+
+    # ประกอบ messages ใหม่
+    result = list(sys_msgs)  # system prompts ก่อน
+    result.append({
+        "role": "system",
+        "content": f"[สรุปบทสนทนาก่อนหน้า ({n_old} ข้อความ)]\n{summary_text}"
+    })
+    result.extend(recent_msgs)
+    return result
+
+
 cooldowns = {}  # pid → timestamp เมื่อหมด cooldown
 COOLDOWN_429 = 60       # rate limit → cooldown 60 วินาที
 COOLDOWN_SLOW = 30      # ช้าเกิน 10 วินาที → cooldown 30 วินาที
@@ -404,26 +457,16 @@ def forward_chat_stream(body_bytes, handler, model_override="", request_headers=
         messages.insert(0, {"role": "system", "content": sys_prompt})
         data["messages"] = messages
 
-    # RAG context
-    session_id = get_session_id_from_request(request_headers or {}, messages)
+    # Sliding Window + Auto-Summary: สรุปข้อความเก่าถ้าคุยยาว
+    data["messages"] = compact_messages(data["messages"])
+    messages = data["messages"]
+
     last_user_msg = ""
     for m in reversed(messages):
         if m.get("role") == "user":
             c = m["content"]
             last_user_msg = " ".join(p.get("text","") if isinstance(p,dict) else str(p) for p in c) if isinstance(c, list) else str(c)
             break
-    # ตรวจว่ามีรูปไหม (ก่อน RAG จะแปลง content)
-    _has_image_in_msg = any(
-        isinstance(m.get("content"), list) and any(
-            isinstance(p, dict) and p.get("type") == "image_url" for p in m["content"]
-        ) for m in messages
-    )
-
-    # RAG ปิดถาวร — client (OpenClaw) ส่ง messages history มาเอง
-    # ความจำยาวจัดการที่ client ไม่ใช่ proxy
-    # ถ้าจะเปิดใหม่: uncomment 2 บรรทัดข้างล่าง
-    # if session_id != "default" and not _has_image_in_msg:
-    #     data["messages"] = get_context_for_request(session_id, messages)
 
     query_type = detect_query_type(last_user_msg) if last_user_msg else "chat"
     data["stream"] = True
@@ -625,23 +668,16 @@ def forward_chat(body_bytes, model_override="", request_headers=None):
         messages.insert(0, {"role": "system", "content": sys_prompt})
         data["messages"] = messages
 
-    # === RAG: inject context จาก session ===
-    session_id = get_session_id_from_request(request_headers or {}, messages)
+    # Sliding Window + Auto-Summary
+    data["messages"] = compact_messages(data["messages"])
+    messages = data["messages"]
+
     last_user_msg = ""
     for m in reversed(messages):
         if m.get("role") == "user":
             c = m["content"]
             last_user_msg = " ".join(p.get("text","") if isinstance(p,dict) else str(p) for p in c) if isinstance(c, list) else str(c)
             break
-
-    # ตรวจว่ามีรูปไหม
-    _has_image_in_msg = any(
-        isinstance(m.get("content"), list) and any(
-            isinstance(p, dict) and p.get("type") == "image_url" for p in m["content"]
-        ) for m in messages
-    )
-
-    # RAG ปิดถาวร — client (OpenClaw) ส่ง messages history มาเอง
     # if session_id != "default" and not _has_image_in_msg:
     #     data["messages"] = get_context_for_request(session_id, messages)
 
