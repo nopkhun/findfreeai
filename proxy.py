@@ -452,6 +452,12 @@ def forward_chat_stream(body_bytes, handler, model_override="", request_headers=
 
     messages = data.get("messages", [])
 
+    # Strip metadata marker จาก messages เก่า (OpenClaw ส่ง history รวม metadata กลับมา)
+    for m in messages:
+        c = m.get("content", "")
+        if isinstance(c, str) and "\n---\n📡" in c:
+            m["content"] = c.split("\n---\n📡")[0].rstrip()
+
     # System Prompt injection
     sys_prompt = active_config.get("system_prompt", "")
     if sys_prompt and not any(m.get("role") == "system" for m in messages):
@@ -708,6 +714,12 @@ def forward_chat(body_bytes, model_override="", request_headers=None):
         data.pop("tool_choice", None)
 
     messages = data.get("messages", [])
+
+    # Strip metadata marker จาก messages เก่า
+    for m in messages:
+        c = m.get("content", "")
+        if isinstance(c, str) and "\n---\n📡" in c:
+            m["content"] = c.split("\n---\n📡")[0].rstrip()
 
     # === System Prompt: inject ถ้ายังไม่มี ===
     sys_prompt = active_config.get("system_prompt", "")
