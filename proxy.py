@@ -419,11 +419,11 @@ def forward_chat_stream(body_bytes, handler, model_override="", request_headers=
         ) for m in messages
     )
 
-    # ถ้าไม่มีรูป → inject RAG context ปกติ, ถ้ามีรูป → ข้ามเพื่อรักษา image data
-    if session_id != "default" and not _has_image_in_msg:
-        data["messages"] = get_context_for_request(session_id, messages)
-    if last_user_msg:
-        append_message(session_id, "user", last_user_msg)
+    # RAG ปิดชั่วคราว — ทดสอบว่า AI ตอบตรงขึ้นไหม
+    # if session_id != "default" and not _has_image_in_msg:
+    #     data["messages"] = get_context_for_request(session_id, messages)
+    # if last_user_msg:
+    #     append_message(session_id, "user", last_user_msg)
 
     query_type = detect_query_type(last_user_msg) if last_user_msg else "chat"
     data["stream"] = True
@@ -641,13 +641,11 @@ def forward_chat(body_bytes, model_override="", request_headers=None):
         ) for m in messages
     )
 
-    # RAG ใช้เฉพาะข้อความ — ถ้ามีรูปข้าม RAG เพื่อรักษา image data
-    if session_id != "default" and not _has_image_in_msg:
-        data["messages"] = get_context_for_request(session_id, messages)
-
-    # Save user message to session
-    if last_user_msg:
-        append_message(session_id, "user", last_user_msg)
+    # RAG ปิดชั่วคราว — ทดสอบว่า AI ตอบตรงขึ้นไหม
+    # if session_id != "default" and not _has_image_in_msg:
+    #     data["messages"] = get_context_for_request(session_id, messages)
+    # if last_user_msg:
+    #     append_message(session_id, "user", last_user_msg)
 
     query_type = detect_query_type(last_user_msg) if last_user_msg else "chat"
 
