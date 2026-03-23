@@ -781,6 +781,13 @@ def forward_chat(body_bytes, model_override="", request_headers=None):
                         msg_obj["content"] = msg_obj["reasoning"]
                         log.info(f"  🔧 Normalize: reasoning → content ({len(msg_obj['content'])} chars)")
                     ai_content = msg_obj.get("content", "")
+
+                    # ถ้า content เป็น None/empty → ถือว่า fail (model ตอบไม่ได้)
+                    if not ai_content:
+                        log.warning(f"  ⚠️ {provider['name']}/{model} ตอบ content=null — นับเป็น fail")
+                        record_fail(pid, "content_null")
+                        set_cooldown(pid, COOLDOWN_ERROR, f"content=null from {model}")
+
                     if ai_content and session_id != "default":
                         append_message(session_id, "assistant", ai_content, provider=pid)
 
