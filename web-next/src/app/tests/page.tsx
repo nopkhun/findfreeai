@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import { getData } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import AppShell from "@/components/app-shell";
 
 export default function TestsPage() {
   const [data, setData] = useState<Record<string, unknown>>({});
@@ -33,7 +32,7 @@ export default function TestsPage() {
     "text-[var(--clr-red)] bg-[var(--clr-red)]/15";
 
   return (
-    <AppShell>
+    <>
       <h2 className="text-xl font-bold mb-4">🧪 ผลทดสอบ API</h2>
       {testResults.length > 0 ? (
         <Card>
@@ -107,6 +106,6 @@ export default function TestsPage() {
           </Card>
         </>
       )}
-    </AppShell>
+    </>
   );
 }

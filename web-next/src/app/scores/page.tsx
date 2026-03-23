@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback } from "react";
 import { fetchJSON } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import AppShell from "@/components/app-shell";
 
 interface ScoreEntry {
   id: string;
@@ -128,7 +127,7 @@ export default function ScoresPage() {
   }, [poll]);
 
   return (
-    <AppShell>
+    <>
       <div className="space-y-8">
         <div className="flex items-center justify-between">
           <div>
@@ -194,6 +193,6 @@ export default function ScoresPage() {
           </CardContent>
         </Card>
       </div>
-    </AppShell>
+    </>
   );
 }

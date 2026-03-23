@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { getBrainLogs, getBrainRecs } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
-import AppShell from "@/components/app-shell";
 
 const icons: Record<string, string> = { analysis: "📊", new_apis: "🔍", skill_upgrade: "🚀", report: "📋" };
 const titles: Record<string, string> = { analysis: "วิเคราะห์ผลทดสอบ", new_apis: "API ฟรีใหม่", skill_upgrade: "อัปเกรด Skill", report: "รายงานสรุป" };
@@ -30,7 +29,7 @@ export default function BrainPage() {
     level === "warn" ? "text-[var(--clr-yellow)]" : "text-muted-foreground";
 
   return (
-    <AppShell>
+    <>
       <h2 className="text-xl font-bold mb-4">🧠 AI วิเคราะห์ (Claude CLI)</h2>
 
       {recs.length > 0 ? (
@@ -67,6 +66,6 @@ export default function BrainPage() {
           )}
         </CardContent>
       </Card>
-    </AppShell>
+    </>
   );
 }

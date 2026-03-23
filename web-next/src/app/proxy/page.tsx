@@ -5,7 +5,6 @@ import { getModels, getProxyInfo, reloadProviders, fetchJSON, postJSON, type Mod
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import AppShell from "@/components/app-shell";
 
 export default function ProxyPage() {
   const [models, setModels] = useState<Model[]>([]);
@@ -61,7 +60,7 @@ export default function ProxyPage() {
   const byProvider = (costs.by_provider || {}) as Record<string, Record<string, unknown>>;
 
   return (
-    <AppShell>
+    <>
       <div className="space-y-6">
         {/* OpenClaw Config */}
         <Card className="border-[var(--clr-green)] border-l-4">
@@ -225,6 +224,6 @@ export default function ProxyPage() {
           </Card>
         </div>
       </div>
-    </AppShell>
+    </>
   );
 }

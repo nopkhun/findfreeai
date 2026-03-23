@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import AppShell from "@/components/app-shell";
 
 export const metadata: Metadata = {
   title: "SML AI Router",
@@ -19,7 +20,9 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body className="h-full flex flex-col overflow-hidden antialiased">{children}</body>
+      <body className="h-full flex flex-col overflow-hidden antialiased">
+        <AppShell>{children}</AppShell>
+      </body>
     </html>
   );
 }

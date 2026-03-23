@@ -9,7 +9,6 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import AppShell from "@/components/app-shell";
 
 export default function DashboardPage() {
   const [providers, setProviders] = useState<Provider[]>([]);
@@ -75,7 +74,7 @@ export default function DashboardPage() {
   ];
 
   return (
-    <AppShell>
+    <>
       <div className="space-y-6">
         {/* Action Buttons */}
         <div className="flex flex-wrap gap-3 justify-center">
@@ -285,6 +284,6 @@ export default function DashboardPage() {
           </Card>
         </div>
       </div>
-    </AppShell>
+    </>
   );
 }

@@ -6,7 +6,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import AppShell from "@/components/app-shell";
 
 const PROVIDERS = [
   { env: "GROQ_API_KEY", name: "Groq", hint: "gsk_...", url: "https://console.groq.com/keys", tier: "30 RPM / 14,400 req/วัน", desc: "เร็วที่สุด — แนะนำ" },
@@ -61,7 +60,7 @@ export default function KeysPage() {
   };
 
   return (
-    <AppShell>
+    <>
       <div className="flex items-center justify-between mb-6">
         <div>
           <h2 className="text-xl font-bold">🔑 จัดการ API Keys</h2>
@@ -158,6 +157,6 @@ export default function KeysPage() {
           );
         })}
       </div>
-    </AppShell>
+    </>
   );
 }
