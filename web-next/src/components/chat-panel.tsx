@@ -76,7 +76,8 @@ export default function ChatPanel() {
       });
       const d = await r.json();
       const p = d._proxy || {};
-      const content = d.choices?.[0]?.message?.content || d.error?.message || "ไม่ได้รับคำตอบ";
+      const msg = d.choices?.[0]?.message || {};
+      const content = msg.content || msg.reasoning || d.error?.message || "ไม่ได้รับคำตอบ";
       setMessages(prev => [...prev, {
         role: "assistant", content, provider: p.provider,
         latency: p.latency_ms, model: p.model, reason: p.reason,
