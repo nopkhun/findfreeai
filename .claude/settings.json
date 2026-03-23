@@ -1,0 +1,9 @@
+{
+  "rules": [
+    "ห้าม commit หรือ push ไฟล์ที่มี API key, secret, token, password",
+    "ไฟล์ต้องห้าม: .env, api_keys.json, *.secret, credentials.*",
+    "ก่อน commit ต้องตรวจสอบ: git diff --cached | grep -iE 'api_key|secret|token|password|gsk_|AIza|sk-or|csk-'",
+    "ถ้าพบ secret ให้หยุดทันที แจ้ง user แล้วลบออกก่อน commit",
+    "push ไป https://github.com/smlsoft/findfreeai เท่านั้น"
+  ]
+}
