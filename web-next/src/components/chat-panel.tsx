@@ -44,8 +44,17 @@ export default function ChatPanel() {
     setTimeout(() => chatRef.current?.scrollTo({ top: chatRef.current.scrollHeight, behavior: "smooth" }), 50);
   }, []);
 
+  const sendDirect = (text: string) => {
+    if (!text.trim() || loading) return;
+    setInput("");
+    doSend(text.trim());
+  };
+
   const send = async () => {
-    const text = input.trim();
+    sendDirect(input);
+  };
+
+  const doSend = async (text: string) => {
     if (!text || loading) return;
     const now = new Date().toLocaleTimeString("th-TH", { hour12: false });
 
@@ -98,7 +107,18 @@ export default function ChatPanel() {
     setTimeout(() => setPromptSaved(false), 2000);
   };
 
-  const quickSuggestions = ["สวัสดี", "เล่าเรื่องตลก", "เขียน Python"];
+  const allSuggestions = [
+    "วันนี้อากาศเป็นยังไง", "เล่าเรื่องตลกให้ฟัง", "เขียน Python hello world",
+    "แนะนำอาหารเช้า", "สรุป AI trends 2026", "สูตรผัดกะเพรา",
+    "อธิบาย blockchain ง่ายๆ", "เขียน SQL query JOIN", "แต่งกลอน 4 บท",
+    "เปรียบเทียบ React vs Vue", "วิธีออกกำลังกายที่บ้าน", "แนะนำหนังน่าดู",
+    "อธิบาย API คืออะไร", "สอนทำ Docker เบื้องต้น", "ประวัติศาสตร์สั้นๆ กรุงเทพ",
+    "เขียน regex หา email", "วิธีประหยัดเงิน", "แนะนำเพลงฟังสบาย",
+    "คำนวณ BMI ให้หน่อย", "เขียน JavaScript sort array",
+  ];
+  const [quickSuggestions] = useState(() =>
+    [...allSuggestions].sort(() => Math.random() - 0.5).slice(0, 10)
+  );
 
   return (
     <>
@@ -152,7 +172,7 @@ export default function ChatPanel() {
               <div className="flex flex-wrap gap-1.5 mt-3 justify-center">
                 {quickSuggestions.map(q => (
                   <Button key={q} variant="outline" size="sm" className="text-xs rounded-full"
-                    onClick={() => { setInput(q); setTimeout(send, 0); }}>
+                    onClick={() => sendDirect(q)}>
                     {q}
                   </Button>
                 ))}
