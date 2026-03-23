@@ -1584,7 +1584,14 @@ class Handler(BaseHTTPRequestHandler):
                 self._json([])
         elif self.path.startswith("/api/keys"):
             keys = load_api_keys()
-            self._json({"keys": keys, "count": len(keys)})
+            # Mask keys — แสดงแค่ 4 ตัวแรก + ***
+            masked = {}
+            for k, v in keys.items():
+                if v and len(v) > 4:
+                    masked[k] = v[:4] + "*" * min(8, len(v) - 4) + v[-2:]
+                else:
+                    masked[k] = "***"
+            self._json({"keys": masked, "count": len(keys)})
         elif self.path.startswith("/api/brain/logs"):
             self._json(brain_live_logs[-100:])
         elif self.path.startswith("/api/brain/recommendations"):

@@ -25,6 +25,7 @@ export default function KeysPage() {
   const [keys, setKeys] = useState<Record<string, string>>({});
   const [testResults, setTestResults] = useState<Record<string, { status: string; message?: string; latency_ms?: number }>>({});
   const [saveStatus, setSaveStatus] = useState("");
+  const [showKey, setShowKey] = useState("");
   const saveTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   useEffect(() => {
@@ -112,9 +113,15 @@ export default function KeysPage() {
                   <Badge variant="secondary" className="text-xs">{p.tier}</Badge>
                   <span className="text-xs text-muted-foreground">{p.desc}</span>
                 </div>
-                <Input type="text" placeholder={p.hint} value={keys[p.env] || ""}
-                  onChange={e => onInput(p.env, e.target.value)}
-                  className="font-mono text-sm" />
+                <div className="relative">
+                  <Input type={showKey === p.env ? "text" : "password"} placeholder={p.hint} value={keys[p.env] || ""}
+                    onChange={e => onInput(p.env, e.target.value)}
+                    className="font-mono text-sm pr-10" />
+                  <button type="button" onClick={() => setShowKey(showKey === p.env ? "" : p.env)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground hover:text-foreground cursor-pointer">
+                    {showKey === p.env ? "🙈" : "👁"}
+                  </button>
+                </div>
                 {r && (
                   <div className={`mt-3 px-3 py-2 rounded-lg text-sm ${
                     isOk ? "bg-[var(--clr-green)]/10" : isLimit ? "bg-[var(--clr-yellow)]/10" : isTesting ? "bg-[var(--clr-accent)]/10" : "bg-[var(--clr-red)]/10"

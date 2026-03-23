@@ -83,6 +83,9 @@ export default function ChatPanel() {
         queryType: p.query_type,
         time: new Date().toLocaleTimeString("th-TH", { hour12: false }),
       }]);
+
+      // สร้าง follow-up suggestions จากบทสนทนา
+      generateFollowUps(text, content);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Unknown error";
       setMessages(prev => [...prev, { role: "assistant", content: `❌ ${msg}`, time: new Date().toLocaleTimeString("th-TH") }]);
@@ -119,6 +122,33 @@ export default function ChatPanel() {
   const [quickSuggestions] = useState(() =>
     [...allSuggestions].sort(() => Math.random() - 0.5).slice(0, 10)
   );
+  const [followUps, setFollowUps] = useState<string[]>([]);
+
+  const generateFollowUps = async (userQ: string, aiAnswer: string) => {
+    try {
+      const r = await fetch("/v1/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "auto",
+          messages: [
+            { role: "system", content: "สร้างคำถามต่อเนื่อง 5 ข้อ จากบทสนทนานี้ ตอบเป็น JSON array เท่านั้น เช่น [\"คำถาม1\",\"คำถาม2\",...] ห้ามมีข้อความอื่น" },
+            { role: "user", content: `คำถาม: ${userQ.slice(0, 100)}\nคำตอบ: ${aiAnswer.slice(0, 200)}` },
+          ],
+          max_tokens: 150,
+        }),
+      });
+      const d = await r.json();
+      const raw = d.choices?.[0]?.message?.content || "";
+      const match = raw.match(/\[[\s\S]*\]/);
+      if (match) {
+        const arr = JSON.parse(match[0]);
+        if (Array.isArray(arr)) setFollowUps(arr.slice(0, 5));
+      }
+    } catch {
+      setFollowUps([]);
+    }
+  };
 
   return (
     <>
@@ -214,6 +244,18 @@ export default function ChatPanel() {
             </div>
           )
         ))}
+
+        {/* Follow-up suggestions */}
+        {followUps.length > 0 && !loading && messages.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 px-1">
+            {followUps.map((q, i) => (
+              <Button key={i} variant="outline" size="sm" className="text-xs rounded-full h-auto py-1 px-2.5 text-left"
+                onClick={() => { setFollowUps([]); sendDirect(q); }}>
+                {q}
+              </Button>
+            ))}
+          </div>
+        )}
 
         {loading && (
           <div className="flex justify-start">
