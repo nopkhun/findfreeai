@@ -65,7 +65,7 @@ export default function KeysPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h2 className="text-xl font-bold">🔑 จัดการ API Keys</h2>
-          <p className="text-sm mt-1 text-muted-foreground">ใส่ key → กดทดสอบ → ผ่านแล้วบันทึกอัตโนมัติ</p>
+          <p className="text-sm mt-1 text-muted-foreground">ใส่ key → กดทดสอบเพื่อเช็คว่าใช้ได้จริง</p>
         </div>
         <div className="flex items-center gap-3">
           <Button onClick={testAll}>🧪 ทดสอบทั้งหมด</Button>
@@ -121,7 +121,7 @@ export default function KeysPage() {
                   </button>
                 </div>
                 {isEditing && !r && (
-                  <p className="text-xs mt-2 text-muted-foreground">💡 กดทดสอบเพื่อตรวจสอบและบันทึก key</p>
+                  <p className="text-xs mt-2 text-muted-foreground">💡 กดทดสอบเพื่อเช็คว่า key ใช้ได้</p>
                 )}
                 {r && (
                   <div className={`mt-3 px-3 py-2 rounded-lg text-sm ${
@@ -130,15 +130,15 @@ export default function KeysPage() {
                     {isTesting && <span className="text-[var(--clr-accent)]">⏳ กำลังทดสอบ {p.name}...</span>}
                     {isOk && (
                       <div className="flex items-center justify-between">
-                        <span className="font-bold text-[var(--clr-green)]">✅ ผ่าน! บันทึกแล้ว</span>
+                        <span className="font-bold text-[var(--clr-green)]">✅ ผ่าน! ใช้ได้จริง</span>
                         {r.latency_ms && <Badge variant="outline" className="text-[var(--clr-green)] text-xs">{r.latency_ms}ms</Badge>}
                       </div>
                     )}
-                    {isLimit && <span className="font-bold text-[var(--clr-yellow)]">⚠️ Key ใช้ได้ แต่ถึง rate limit (บันทึกแล้ว)</span>}
+                    {isLimit && <span className="font-bold text-[var(--clr-yellow)]">⚠️ Key ใช้ได้ แต่ถึง rate limit</span>}
                     {isFail && (
                       <>
                         <div className="flex items-center justify-between">
-                          <span className="font-bold text-[var(--clr-red)]">❌ ไม่ผ่าน — ไม่บันทึก</span>
+                          <span className="font-bold text-[var(--clr-red)]">❌ ไม่ผ่าน</span>
                           {maskedKeys[p.env] && (
                             <Button variant="outline" size="sm" className="text-xs h-6" onClick={() => {
                               setEditingKeys(prev => { const n = { ...prev }; delete n[p.env]; return n; });
