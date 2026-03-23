@@ -95,6 +95,28 @@ active_config = {
 }
 
 
+cooldowns = {}  # pid → timestamp เมื่อหมด cooldown
+COOLDOWN_429 = 60       # rate limit → cooldown 60 วินาที
+COOLDOWN_SLOW = 30      # ช้าเกิน 10 วินาที → cooldown 30 วินาที
+COOLDOWN_ERROR = 15     # error อื่น → cooldown 15 วินาที
+SLOW_THRESHOLD_MS = 10000  # ช้าเกินนี้ → cooldown
+
+
+def is_cooled_down(pid):
+    """เช็คว่า provider อยู่ใน cooldown หรือไม่"""
+    if pid not in cooldowns:
+        return False
+    if time.time() >= cooldowns[pid]:
+        del cooldowns[pid]
+        return False
+    return True
+
+
+def set_cooldown(pid, seconds, reason=""):
+    cooldowns[pid] = time.time() + seconds
+    log.info(f"  ❄️ Cooldown {pid} {seconds}s ({reason})")
+
+
 def get_stats(pid):
     if pid not in stats:
         stats[pid] = {"success": 0, "fail": 0, "avg_latency": 0, "total_latency": 0,
@@ -108,12 +130,20 @@ def record_ok(pid, latency_ms):
     s["total_latency"] += latency_ms
     s["avg_latency"] = round(s["total_latency"] / s["success"])
     s["last_ok"] = datetime.now().isoformat()
+    # ช้าเกิน → cooldown
+    if latency_ms > SLOW_THRESHOLD_MS:
+        set_cooldown(pid, COOLDOWN_SLOW, f"slow {latency_ms}ms")
 
 
 def record_fail(pid, err):
     s = get_stats(pid)
     s["fail"] += 1
     s["last_error"] = f"{datetime.now().strftime('%H:%M:%S')} {err}"
+    # Rate limit → cooldown นาน
+    if "429" in str(err):
+        set_cooldown(pid, COOLDOWN_429, "429 rate limit")
+    else:
+        set_cooldown(pid, COOLDOWN_ERROR, str(err)[:50])
 
 
 def add_request_log(provider, model, status, latency, error="", reason=""):
@@ -167,9 +197,16 @@ def get_available_providers():
 
     keys = load_keys()
     available = []
+    cooled = []
     for pid, p in PROVIDERS.items():
         key = keys.get(p["env_key"], "")
         if not key:
+            continue
+        # Cooldown: ข้ามไปก่อน แต่เก็บไว้ fallback สุดท้าย
+        if is_cooled_down(pid):
+            remaining = round(cooldowns.get(pid, 0) - time.time())
+            cooled.append({"id": pid, **p, "api_key": key, "dp": -999, "stats": get_stats(pid),
+                          "cooldown_remaining": remaining})
             continue
         s = get_stats(pid)
         dp = p["priority"]
@@ -202,6 +239,11 @@ def get_available_providers():
             dp += 10
         available.append({"id": pid, **p, "api_key": key, "dp": dp, "stats": s})
     available.sort(key=lambda x: x["dp"], reverse=True)
+    # ถ้าไม่มี available เลย → ใช้ cooled down เป็น fallback สุดท้าย
+    if not available and cooled:
+        log.warning("⚠️ ทุก provider อยู่ใน cooldown — ใช้ตัวที่ cooldown เหลือน้อยสุด")
+        cooled.sort(key=lambda x: x.get("cooldown_remaining", 999))
+        return cooled
     return available
 
 
@@ -748,8 +790,14 @@ class ProxyHandler(BaseHTTPRequestHandler):
             self._handle_providers()
 
         elif self.path.startswith("/v1/stats"):
+            # Cooldown info
+            cd_info = {}
+            for pid, expire_at in cooldowns.items():
+                remaining = round(expire_at - time.time())
+                cd_info[pid] = {"remaining_seconds": max(0, remaining), "expires_at": datetime.fromtimestamp(expire_at).strftime("%H:%M:%S")}
             self._json(200, {
                 "stats": stats,
+                "cooldowns": cd_info,
                 "request_log": request_log[-50:],
                 "config": active_config,
             })
@@ -905,6 +953,11 @@ class ProxyHandler(BaseHTTPRequestHandler):
         for pid, p in PROVIDERS.items():
             has_key = bool(keys.get(p["env_key"], ""))
             s = get_stats(pid)
+            cd = None
+            if pid in cooldowns:
+                remaining = round(cooldowns[pid] - time.time())
+                if remaining > 0:
+                    cd = {"remaining": remaining, "until": datetime.fromtimestamp(cooldowns[pid]).strftime("%H:%M:%S")}
             result.append({
                 "id": pid,
                 "name": p["name"],
@@ -914,6 +967,7 @@ class ProxyHandler(BaseHTTPRequestHandler):
                 "priority": p["priority"],
                 "stats": s,
                 "max_rpm": p["max_rpm"],
+                "cooldown": cd,
             })
         self._json(200, {"providers": result})
 
