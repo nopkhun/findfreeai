@@ -3,8 +3,8 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
   getProxyLogs, getProviders, getSkills, getStatus,
-  startScan, startTestKeys, startBrain,
-  type Provider, type LogEntry,
+  startScan, startTestKeys, startBrain, getDashLogs,
+  type Provider, type LogEntry, type DashLog,
 } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -33,9 +33,22 @@ export default function DashboardPage() {
     return () => clearInterval(id);
   }, [poll]);
 
-  const doScan = () => { setScanning(true); startScan(); };
-  const doTestKeys = () => { setScanning(true); startTestKeys(); };
-  const doBrain = () => { setScanning(true); startBrain(); };
+  const [dashLogs, setDashLogs] = useState<DashLog[]>([]);
+  const [activeAction, setActiveAction] = useState<string>("");
+
+  // Poll dash logs เมื่อ scanning
+  useEffect(() => {
+    if (!scanning) { setDashLogs([]); setActiveAction(""); return; }
+    const id = setInterval(async () => {
+      const logs = await getDashLogs();
+      if (logs) setDashLogs(logs as DashLog[]);
+    }, 1000);
+    return () => clearInterval(id);
+  }, [scanning]);
+
+  const doScan = () => { setScanning(true); setActiveAction("scan"); startScan(); };
+  const doTestKeys = () => { setScanning(true); setActiveAction("keys"); startTestKeys(); };
+  const doBrain = () => { setScanning(true); setActiveAction("brain"); startBrain(); };
 
   const bestPerType = (skills as { best_per_type?: Record<string, string> }).best_per_type || {};
   const totalRequests = (skills as { total_requests?: number }).total_requests || 0;
@@ -65,6 +78,32 @@ export default function DashboardPage() {
             🧠 AI วิเคราะห์
           </Button>
         </div>
+
+        {/* Live Action Log */}
+        {scanning && dashLogs.length > 0 && (
+          <Card className="bg-[#0a0e14]">
+            <CardContent className="p-3">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="w-2 h-2 rounded-full bg-[var(--clr-green)] animate-pulse" />
+                <span className="text-xs font-bold text-[var(--clr-green)]">
+                  {activeAction === "scan" ? "🔍 กำลังค้นหา..." : activeAction === "keys" ? "🔑 กำลังทดสอบ..." : "🧠 กำลังวิเคราะห์..."}
+                </span>
+                <span className="text-[10px] text-muted-foreground ml-auto">{dashLogs.length} logs</span>
+              </div>
+              <div className="font-mono text-[11px] leading-relaxed max-h-32 overflow-y-auto space-y-0.5">
+                {dashLogs.slice(-10).map((l, i) => (
+                  <div key={i} className={
+                    l.level === "ok" ? "text-[var(--clr-green)]" :
+                    l.level === "error" ? "text-[var(--clr-red)]" :
+                    l.level === "warn" ? "text-[var(--clr-yellow)]" : "text-muted-foreground"
+                  }>
+                    <span className="text-muted-foreground/50">[{l.time}]</span> {l.msg}
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Stats Cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

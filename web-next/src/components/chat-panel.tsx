@@ -183,13 +183,7 @@ export default function ChatPanel() {
         </div>
       )}
 
-      {/* OpenClaw */}
-      <div className="px-3 py-2 border-b">
-        <a href="http://127.0.0.1:18790/chat?session=smlairouter-test" target="_blank" rel="noreferrer"
-          className="flex items-center justify-center gap-2 w-full px-3 py-2 rounded-lg text-sm font-bold text-white bg-gradient-to-r from-indigo-500 to-violet-500 hover:opacity-90 transition-opacity">
-          🦞 ทดสอบบน OpenClaw <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/20">:18790</span>
-        </a>
-      </div>
+      {/* OpenClaw link removed */}
 
       {/* Messages */}
       <div ref={chatRef} className="flex-1 overflow-y-auto px-3 py-3 space-y-3">
