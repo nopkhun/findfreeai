@@ -823,16 +823,6 @@ def forward_chat(body_bytes, model_override="", request_headers=None):
 
                 record_ok(pid, latency)
                 record_call(pid, query_type, latency, True, model_id=model)
-                # reason จะถูกสร้างตรงด้านล่าง แต่ log ก่อน
-                _reason = ""
-                if best_order and pid in best_order:
-                    _reason = f"Skill: '{query_type}' → {pid}"
-                elif i == 0:
-                    _reason = f"Priority สูงสุด"
-                else:
-                    _reason = f"Failover (attempt {i+1})"
-                add_request_log(provider["name"], model, "ok", latency, reason=_reason,
-                    inbound=last_user_msg, outbound=ai_content)
                 log.info(f"  ✅ {provider['name']} {latency}ms [{query_type}]")
 
                 # Save assistant response to RAG session
@@ -844,6 +834,17 @@ def forward_chat(body_bytes, model_override="", request_headers=None):
                         msg_obj["content"] = msg_obj["reasoning"]
                         log.info(f"  🔧 Normalize: reasoning → content ({len(msg_obj['content'])} chars)")
                     ai_content = msg_obj.get("content", "")
+
+                    # Log request หลังจากได้ ai_content แล้ว
+                    _reason = ""
+                    if best_order and pid in best_order:
+                        _reason = f"Skill: '{query_type}' → {pid}"
+                    elif i == 0:
+                        _reason = f"Priority สูงสุด"
+                    else:
+                        _reason = f"Failover (attempt {i+1})"
+                    add_request_log(provider["name"], model, "ok", latency, reason=_reason,
+                        inbound=last_user_msg, outbound=ai_content)
 
                     # ถ้า content เป็น None/empty → ถือว่า fail (model ตอบไม่ได้)
                     if not ai_content:
