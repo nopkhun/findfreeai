@@ -616,8 +616,7 @@ def forward_chat_stream(body_bytes, handler, model_override="", request_headers=
             add_request_log(provider["name"], model, "ok", latency, reason=f"Stream: {query_type}")
             log.info(f"  ✅ STREAM {provider['name']} {latency}ms")
 
-            if full_content and session_id != "default":
-                append_message(session_id, "assistant", full_content, provider=pid)
+            # RAG ปิดแล้ว — ไม่ต้อง save message
             return
 
         except HTTPError as e:
@@ -788,8 +787,7 @@ def forward_chat(body_bytes, model_override="", request_headers=None):
                         record_fail(pid, "content_null")
                         set_cooldown(pid, COOLDOWN_ERROR, f"content=null from {model}")
 
-                    if ai_content and session_id != "default":
-                        append_message(session_id, "assistant", ai_content, provider=pid)
+                    # RAG ปิดแล้ว — ไม่ต้อง save message
 
                     # สร้าง reason ว่าทำไมเลือก provider นี้
                     reason_parts = []
@@ -816,7 +814,7 @@ def forward_chat(body_bytes, model_override="", request_headers=None):
                         "latency_ms": latency,
                         "attempt": i + 1,
                         "query_type": query_type,
-                        "session_id": session_id,
+                        "session_id": "default",
                         "reason": " | ".join(reason_parts),
                         "tokens": input_tokens + output_tokens,
                         "cost_usd": cost_info.get("cost_usd", 0),
