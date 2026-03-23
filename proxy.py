@@ -199,7 +199,7 @@ def record_fail(pid, err):
         set_cooldown(pid, COOLDOWN_ERROR, str(err)[:50])
 
 
-def add_request_log(provider, model, status, latency, error="", reason=""):
+def add_request_log(provider, model, status, latency, error="", reason="", inbound="", outbound=""):
     entry = {
         "time": datetime.now().strftime("%H:%M:%S.%f")[:-3],
         "provider": provider,
@@ -208,6 +208,8 @@ def add_request_log(provider, model, status, latency, error="", reason=""):
         "latency_ms": latency,
         "error": error,
         "reason": reason,
+        "inbound": inbound[:80] if inbound else "",
+        "outbound": outbound[:100] if outbound else "",
     }
     request_log.append(entry)
     if len(request_log) > 200:
@@ -656,7 +658,8 @@ def forward_chat_stream(body_bytes, handler, model_override="", request_headers=
 
             token_info = f"in:{input_t} out:{output_t}" if input_t > 0 else f"~{output_t} tokens"
             add_request_log(provider["name"], model, "ok", latency,
-                reason=f"Stream: {query_type} | {token_info} | {'ฟรี' if cost_thb == 0 else f'฿{cost_thb}'}")
+                reason=f"Stream: {query_type} | {token_info} | {'ฟรี' if cost_thb == 0 else f'฿{cost_thb}'}",
+                inbound=last_user_msg, outbound=full_content)
             log.info(f"  ✅ STREAM {provider['name']} {latency}ms [{query_type}] {token_info} {'ฟรี' if cost_thb == 0 else f'฿{cost_thb}'}")
 
             # ส่ง metadata chunk สุดท้าย
@@ -828,7 +831,8 @@ def forward_chat(body_bytes, model_override="", request_headers=None):
                     _reason = f"Priority สูงสุด"
                 else:
                     _reason = f"Failover (attempt {i+1})"
-                add_request_log(provider["name"], model, "ok", latency, reason=_reason)
+                add_request_log(provider["name"], model, "ok", latency, reason=_reason,
+                    inbound=last_user_msg, outbound=ai_content)
                 log.info(f"  ✅ {provider['name']} {latency}ms [{query_type}]")
 
                 # Save assistant response to RAG session

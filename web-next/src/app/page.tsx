@@ -228,13 +228,26 @@ export default function DashboardPage() {
                       : (log.latency_ms || 0) < 1500
                       ? "text-[var(--clr-yellow)]"
                       : "text-[var(--clr-red)]";
+                    const logEntry = log as LogEntry & { inbound?: string; outbound?: string };
                     return (
-                      <div key={log.time + i} className={`flex items-center gap-3 px-4 py-2.5 ${i === 0 ? "animate-slide-down" : ""}`}>
-                        <div className={`w-2 h-2 rounded-full shrink-0 ${log.status === "ok" ? "bg-[var(--clr-green)]" : "bg-[var(--clr-red)]"} ${i === 0 ? "animate-pulse-green" : ""}`} />
-                        <span className="font-mono text-[11px] w-20 shrink-0 text-muted-foreground">{log.time?.split(".")[0]}</span>
-                        <span className="font-semibold text-xs w-20 shrink-0">{log.provider}</span>
-                        <span className={`font-mono text-xs font-bold w-16 text-right shrink-0 ${latColor}`}>{log.latency_ms}ms</span>
-                        <span className="text-[11px] truncate flex-1 text-muted-foreground">{log.reason || ""}</span>
+                      <div key={log.time + i} className={`px-4 py-2.5 ${i === 0 ? "animate-slide-down" : ""}`}>
+                        <div className="flex items-center gap-3">
+                          <div className={`w-2 h-2 rounded-full shrink-0 ${log.status === "ok" ? "bg-[var(--clr-green)]" : "bg-[var(--clr-red)]"} ${i === 0 ? "animate-pulse-green" : ""}`} />
+                          <span className="font-mono text-[11px] w-16 shrink-0 text-muted-foreground">{log.time?.split(".")[0]}</span>
+                          <span className="font-semibold text-xs w-20 shrink-0">{log.provider}</span>
+                          <span className={`font-mono text-xs font-bold w-16 text-right shrink-0 ${latColor}`}>{log.latency_ms}ms</span>
+                          <span className="text-[11px] truncate flex-1 text-muted-foreground">{log.reason || ""}</span>
+                        </div>
+                        {(logEntry.inbound || logEntry.outbound) && (
+                          <div className="ml-7 mt-1 text-[11px] space-y-0.5">
+                            {logEntry.inbound && (
+                              <div className="text-[var(--clr-accent)] truncate">📥 {logEntry.inbound}</div>
+                            )}
+                            {logEntry.outbound && (
+                              <div className="text-muted-foreground truncate">📤 {logEntry.outbound}</div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
