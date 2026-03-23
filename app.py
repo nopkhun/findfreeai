@@ -780,6 +780,17 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
       <div class="stat-card"><div class="label">GitHub Repos</div><div class="value" style="color:var(--purple)" id="sGithub">-</div></div>
       <div class="stat-card"><div class="label">โพสต์โซเชียล</div><div class="value" style="color:var(--yellow)" id="sSocial">-</div></div>
     </div>
+    <!-- Proxy Live Log -->
+    <div class="section">
+      <div class="section-title">📡 Proxy Log (Real-time)</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>เวลา</th><th>Provider</th><th>Model</th><th>สถานะ</th><th>ความเร็ว</th><th>Error</th></tr></thead>
+          <tbody id="proxyLogTable"><tr><td colspan="6" class="empty">รอ request แรก...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
     <!-- ฟอร์มใส่ API Key -->
     <div class="section">
       <div class="section-title" style="font-size:20px;">🔑 ใส่ API Key ที่สมัครมา (แก้ไขได้ทันที)</div>
@@ -1100,18 +1111,18 @@ async function loadKeyForm() {
       const has = existing[p.env] ? true : false;
       const border = has ? 'var(--green)' : 'var(--border)';
       const icon = has ? '✅' : '⬜';
-      return `<div style="display:flex;align-items:center;gap:8px;padding:8px;border:1px solid ${border};border-radius:8px;background:var(--bg3);">
-        <span style="font-size:14px;">${icon}</span>
-        <div style="flex:1;">
-          <label style="font-size:13px;color:var(--text2);display:block;">${esc(p.name)}</label>
-          <input type="text" id="key_${p.env}" placeholder="${esc(p.hint)}"
-            value="${has ? existing[p.env] : ''}"
-            oninput="autoSaveKeys()"
-            style="width:100%;padding:6px 8px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:monospace;font-size:13px;margin-top:2px;">
-          <span id="test_${p.env}" style="font-size:12px;"></span>
+      return `<div style="padding:10px;border:1px solid ${border};border-radius:8px;background:var(--bg3);">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="font-size:14px;">${icon}</span>
+          <label style="font-size:14px;color:var(--text);font-weight:600;flex:1;">${esc(p.name)}</label>
+          <button onclick="testOneKey('${p.env}','${esc(p.name)}')" id="tbtn_${p.env}" style="padding:5px 12px;border:1px solid var(--accent);border-radius:6px;background:var(--bg);color:var(--accent);cursor:pointer;font-size:13px;">ทดสอบ</button>
+          <a href="${esc(p.url)}" target="_blank" style="font-size:13px;white-space:nowrap;color:var(--accent);">สมัคร →</a>
         </div>
-        <button onclick="testOneKey('${p.env}','${esc(p.name)}')" style="padding:4px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--accent);cursor:pointer;font-size:12px;white-space:nowrap;">ทดสอบ</button>
-        <a href="${esc(p.url)}" target="_blank" style="font-size:12px;white-space:nowrap;">สมัคร →</a>
+        <input type="text" id="key_${p.env}" placeholder="${esc(p.hint)}"
+          value="${has ? existing[p.env] : ''}"
+          oninput="autoSaveKeys()"
+          style="width:100%;padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:monospace;font-size:13px;margin-top:6px;">
+        <div id="test_${p.env}" style="font-size:13px;margin-top:4px;min-height:20px;"></div>
       </div>`;
     }).join('') + '</div>';
 }
@@ -1124,18 +1135,20 @@ function autoSaveKeys() {
 
 async function testOneKey(envName, providerName) {
   const el = document.getElementById('test_'+envName);
+  const btn = document.getElementById('tbtn_'+envName);
   const key = document.getElementById('key_'+envName)?.value?.trim();
-  if(!key) { el.innerHTML='<span style="color:var(--red)">ไม่มี key</span>'; return; }
-  el.innerHTML='<span style="color:var(--yellow)">กำลังทดสอบ...</span>';
-  // save first
+  if(!key) { el.innerHTML='<span style="color:var(--red)">❌ ไม่มี key — กรุณาใส่ key แล้วกดทดสอบ</span>'; return; }
+  el.innerHTML='<span style="color:var(--yellow)">⏳ กำลังทดสอบ '+esc(providerName)+'...</span>';
+  if(btn) { btn.disabled=true; btn.textContent='⏳'; }
   await saveKeys();
   try {
     const r = await fetch('/api/test-one-key', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({env_name:envName})});
     const d = await r.json();
-    if(d.status==='ok') el.innerHTML=`<span style="color:var(--green)">✅ ผ่าน (${d.latency_ms||''}ms)</span>`;
-    else if(d.status==='rate_limited') el.innerHTML='<span style="color:var(--yellow)">⚠️ Rate limited</span>';
-    else el.innerHTML=`<span style="color:var(--red)">❌ ${d.message||'ไม่ผ่าน'}</span>`;
-  } catch(e) { el.innerHTML='<span style="color:var(--red)">❌ Error</span>'; }
+    if(d.status==='ok') el.innerHTML=`<span style="color:var(--green);font-weight:600;">✅ ผ่าน! ใช้ได้จริง (${d.latency_ms||'?'}ms)</span>`;
+    else if(d.status==='rate_limited') el.innerHTML='<span style="color:var(--yellow);font-weight:600;">⚠️ Key ใช้ได้ แต่ถึง rate limit แล้ว — รอสักครู่แล้วลองใหม่</span>';
+    else el.innerHTML=`<span style="color:var(--red);font-weight:600;">❌ ไม่ผ่าน: ${esc(d.message||'Key ไม่ถูกต้อง')}</span>`;
+  } catch(e) { el.innerHTML='<span style="color:var(--red)">❌ เชื่อมต่อไม่ได้</span>'; }
+  if(btn) { btn.disabled=false; btn.textContent='ทดสอบ'; }
 }
 
 async function saveKeys() {
@@ -1381,12 +1394,36 @@ async function pollBrain() {
   } catch(e) {}
 }
 
+async function pollProxyLog() {
+  try {
+    const r = await fetch('/api/proxy-logs?'+Date.now());
+    if(!r.ok) return;
+    const logs = await r.json();
+    const tbody = document.getElementById('proxyLogTable');
+    if(!tbody || !logs.length) return;
+    tbody.innerHTML = logs.slice().reverse().slice(0,30).map(l => {
+      const sc = l.status==='ok' ? 's-alive' : 's-down';
+      const st = l.status==='ok' ? '✅' : '❌';
+      return `<tr>
+        <td style="font-size:13px;color:var(--text3)">${esc(l.time)}</td>
+        <td style="font-weight:600">${esc(l.provider)}</td>
+        <td><span class="tag">${esc(l.model||'-')}</span></td>
+        <td><span class="status-badge ${sc}">${st} ${l.latency_ms?l.latency_ms+'ms':''}</span></td>
+        <td style="font-family:monospace;font-size:13px">${l.latency_ms||'-'}ms</td>
+        <td style="font-size:12px;color:var(--red)">${esc(l.error||'')}</td>
+      </tr>`;
+    }).join('');
+  } catch(e){}
+}
+
 // Poll
 setInterval(pollLogs, 1500);
 setInterval(pollData, 5000);
 setInterval(pollBrain, 3000);
 setInterval(checkStatus, 2000);
+setInterval(pollProxyLog, 2000);
 pollData();
+pollProxyLog();
 </script>
 </body>
 </html>"""
@@ -1537,9 +1574,16 @@ class Handler(BaseHTTPRequestHandler):
             self._json_file()
         elif self.path.startswith("/api/status"):
             self._json({"scanning": is_scanning})
+        elif self.path.startswith("/api/proxy-logs"):
+            # ดึง proxy request log จาก proxy
+            try:
+                from urllib.request import urlopen
+                with urlopen("http://127.0.0.1:8900/v1/logs", timeout=3) as r:
+                    self._json(json.loads(r.read().decode("utf-8")))
+            except Exception:
+                self._json([])
         elif self.path.startswith("/api/keys"):
             keys = load_api_keys()
-            # ส่ง key จริงกลับไปที่ฟอร์ม (ไม่ mask)
             self._json({"keys": keys, "count": len(keys)})
         elif self.path.startswith("/api/brain/logs"):
             self._json(brain_live_logs[-100:])
