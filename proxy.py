@@ -301,13 +301,9 @@ def forward_chat_stream(body_bytes, handler, model_override="", request_headers=
             types = [p.get("type", "?") if isinstance(p, dict) else "str" for p in c]
             log.info(f"  📋 Message content types: {types} (role={msg.get('role')})")
 
-    # === Payload optimization: ลด payload ให้เล็กพอสำหรับ free tier ===
-    # ลบ tools (free providers ไม่รองรับ OpenClaw tools)
-    if "tools" in data:
-        log.info(f"  🔧 ลบ tools ({len(data['tools'])} tools) เพื่อลด payload")
-        del data["tools"]
-    if "tool_choice" in data:
-        del data["tool_choice"]
+    # === Payload optimization: ลด payload สำหรับ free tier ===
+    # ส่ง tools ไป Groq ได้ (รองรับ tool calling) แต่ลบ tools สำหรับ providers อื่น
+    # จะลบตอน forward แทน ไม่ลบที่นี่
     # ตัด system prompt ที่ยาวเกิน 2000 chars
     for msg in data.get("messages", []):
         if msg.get("role") == "system" and isinstance(msg.get("content"), str) and len(msg["content"]) > 2000:
@@ -366,7 +362,16 @@ def forward_chat_stream(body_bytes, handler, model_override="", request_headers=
         api_base = provider["api_base"].rstrip("/")
         url = f"{api_base}/chat/completions"
         data["model"] = model
-        payload = json.dumps(data).encode("utf-8")
+
+        # Provider ที่รองรับ tool calling: groq, openrouter
+        # Provider อื่น: ลบ tools ออกก่อนส่ง
+        send_data = dict(data)
+        if pid not in ("groq", "openrouter") and "tools" in send_data:
+            log.info(f"  🔧 ลบ tools สำหรับ {pid}")
+            del send_data["tools"]
+            send_data.pop("tool_choice", None)
+
+        payload = json.dumps(send_data).encode("utf-8")
 
         headers = {
             "Content-Type": "application/json",
@@ -374,7 +379,7 @@ def forward_chat_stream(body_bytes, handler, model_override="", request_headers=
             "User-Agent": "Mozilla/5.0 SMLAIRouter/2.0",
         }
 
-        log.info(f"[STREAM {i+1}/{max_tries}] {provider['name']} → {model}")
+        log.info(f"[STREAM {i+1}/{max_tries}] {provider['name']} → {model} (tools={'Y' if 'tools' in send_data else 'N'})")
         start = time.time()
 
         try:
@@ -394,17 +399,37 @@ def forward_chat_stream(body_bytes, handler, model_override="", request_headers=
             full_content = ""
             for line in resp:
                 decoded = line.decode("utf-8", errors="replace")
-                handler.wfile.write(line)
-                handler.wfile.flush()
-                # Collect content for RAG
+
+                # Normalize stream chunks: เพิ่ม role ทุก chunk + ลบ fields ที่ OpenClaw ไม่เข้าใจ
                 if decoded.startswith("data: ") and not decoded.startswith("data: [DONE]"):
                     try:
                         chunk = json.loads(decoded[6:])
-                        delta = chunk.get("choices", [{}])[0].get("delta", {}).get("content", "")
-                        if delta:
-                            full_content += delta
+                        delta = chunk.get("choices", [{}])[0].get("delta", {})
+
+                        # เพิ่ม role ทุก chunk (OpenRouter style)
+                        if "role" not in delta:
+                            delta["role"] = "assistant"
+
+                        # ลบ fields ที่ OpenClaw อาจ parse ไม่ได้
+                        for key in ["logprobs", "x_groq", "system_fingerprint"]:
+                            chunk.pop(key, None)
+                        chunk["choices"][0].pop("logprobs", None)
+
+                        # Collect content for RAG
+                        content = delta.get("content", "")
+                        if content:
+                            full_content += content
+
+                        # เขียน chunk ที่ normalize แล้ว
+                        normalized = f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
+                        handler.wfile.write(normalized.encode("utf-8"))
+                        handler.wfile.flush()
+                        continue
                     except Exception:
                         pass
+
+                handler.wfile.write(line)
+                handler.wfile.flush()
 
             resp.close()
             latency = round((time.time() - start) * 1000)
@@ -486,11 +511,7 @@ def forward_chat(body_bytes, model_override="", request_headers=None):
 
     query_type = detect_query_type(last_user_msg) if last_user_msg else "chat"
 
-    # === Payload optimization ===
-    if "tools" in data:
-        del data["tools"]
-    if "tool_choice" in data:
-        del data["tool_choice"]
+    # === Payload optimization (ตัด system prompt ยาว) ===
     for msg in data.get("messages", []):
         if msg.get("role") == "system" and isinstance(msg.get("content"), str) and len(msg["content"]) > 2000:
             msg["content"] = msg["content"][:2000] + "\n\n[ตัดให้สั้นลง]"
@@ -543,7 +564,11 @@ def forward_chat(body_bytes, model_override="", request_headers=None):
 
         # Set model in request
         data["model"] = model
-        payload = json.dumps(data).encode("utf-8")
+        send_data = dict(data)
+        if pid not in ("groq", "openrouter") and "tools" in send_data:
+            del send_data["tools"]
+            send_data.pop("tool_choice", None)
+        payload = json.dumps(send_data).encode("utf-8")
 
         headers = {
             "Content-Type": "application/json",
