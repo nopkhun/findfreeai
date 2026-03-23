@@ -69,7 +69,7 @@ export default function DashboardPage() {
   const stats = [
     { label: "Providers พร้อม", value: providers.filter(p => p.has_key).length, color: "text-[var(--clr-green)]" },
     { label: "Total Requests", value: totalRequests, color: "text-[var(--clr-accent)]" },
-    { label: "Proxy Logs", value: proxyLogs.length, color: "text-[var(--clr-yellow)]" },
+    { label: "Request Logs", value: proxyLogs.length, color: "text-[var(--clr-yellow)]" },
     { label: "Skill Engine", value: `${Object.keys(bestPerType).length} types`, color: "text-[var(--clr-purple)]" },
   ];
 
@@ -233,7 +233,7 @@ export default function DashboardPage() {
         {/* Proxy Log */}
         <div>
           <div className="flex items-center gap-3 mb-3">
-            <h2 className="text-lg font-semibold">📡 Proxy Log</h2>
+            <h2 className="text-lg font-semibold">📡 Request Log</h2>
             <span className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-full bg-[var(--clr-green)]/10 text-[var(--clr-green)]">
               <span className="w-2 h-2 rounded-full bg-[var(--clr-green)] animate-pulse" />
               Real-time

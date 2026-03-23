@@ -140,14 +140,15 @@ export default function ChatPanel() {
         }),
       });
       const d = await r.json();
-      const raw = d.choices?.[0]?.message?.content || "";
+      const msg = d.choices?.[0]?.message || {};
+      const raw = msg.content || msg.reasoning || "";
       const match = raw.match(/\[[\s\S]*\]/);
       if (match) {
         const arr = JSON.parse(match[0]);
-        if (Array.isArray(arr)) setFollowUps(arr.slice(0, 5));
+        if (Array.isArray(arr) && arr.length > 0) setFollowUps(arr.slice(0, 5));
       }
     } catch {
-      setFollowUps([]);
+      // follow-up ไม่สำคัญ — ถ้า fail ก็ไม่ต้องแสดง
     }
   };
 
@@ -193,7 +194,7 @@ export default function ChatPanel() {
             <div>
               <div className="text-5xl mb-3">🦞</div>
               <p className="text-sm font-bold mb-1">SML AI Router Chat</p>
-              <p className="text-xs text-muted-foreground">AI ตอบผ่าน Proxy ฟรี<br />เลือก model หรือใช้ auto</p>
+              <p className="text-xs text-muted-foreground">AI ตอบผ่าน SML AI Router ฟรี<br />เลือก model หรือใช้ auto</p>
               <div className="flex flex-wrap gap-1.5 mt-3 justify-center">
                 {quickSuggestions.map(q => (
                   <Button key={q} variant="outline" size="sm" className="text-xs rounded-full"

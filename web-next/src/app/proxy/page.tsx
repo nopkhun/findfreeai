@@ -64,7 +64,7 @@ export default function ProxyPage() {
       <div className="space-y-6">
         {/* Connection Guide */}
         <div>
-          <h3 className="text-lg font-bold mb-3">🔌 วิธีเชื่อมต่อ Proxy</h3>
+          <h3 className="text-lg font-bold mb-3">🔌 วิธีเชื่อมต่อ SML AI Router</h3>
           <p className="text-sm text-muted-foreground mb-4">ใช้ได้กับทุกแอปที่รองรับ OpenAI API — แค่เปลี่ยน Base URL</p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {[

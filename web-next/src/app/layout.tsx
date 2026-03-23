@@ -4,7 +4,7 @@ import AppShell from "@/components/app-shell";
 
 export const metadata: Metadata = {
   title: "SML AI Router",
-  description: "AI Proxy Dashboard - ค้นหา ทดสอบ และจัดการ AI API ฟรี",
+  description: "SML AI Router — ค้นหา ทดสอบ และจัดการ AI API ฟรี",
 };
 
 export default function RootLayout({

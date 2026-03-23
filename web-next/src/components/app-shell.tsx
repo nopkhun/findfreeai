@@ -12,7 +12,7 @@ const tabs = [
   { href: "/keys", icon: "🔑", label: "API Keys" },
   { href: "/tests", icon: "🧪", label: "ผลทดสอบ" },
   { href: "/brain", icon: "🧠", label: "AI วิเคราะห์" },
-  { href: "/proxy", icon: "🔌", label: "Proxy Config" },
+  { href: "/proxy", icon: "🔌", label: "SML AI Router" },
 ];
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
