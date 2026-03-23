@@ -654,13 +654,14 @@ def forward_chat_stream(body_bytes, handler, model_override="", request_headers=
             cost_info = track_request(pid, model, input_t, output_t, latency, provider.get("api_key", "")[:8])
             cost_thb = round(cost_info.get("cost_usd", 0) * 35, 4)
 
+            token_info = f"in:{input_t} out:{output_t}" if input_t > 0 else f"~{output_t} tokens"
             add_request_log(provider["name"], model, "ok", latency,
-                reason=f"Stream: {query_type} | {total_t} tokens | {'ฟรี' if cost_thb == 0 else f'฿{cost_thb}'}")
-            log.info(f"  ✅ STREAM {provider['name']} {latency}ms [{query_type}] {total_t}t {'ฟรี' if cost_thb == 0 else f'฿{cost_thb}'}")
+                reason=f"Stream: {query_type} | {token_info} | {'ฟรี' if cost_thb == 0 else f'฿{cost_thb}'}")
+            log.info(f"  ✅ STREAM {provider['name']} {latency}ms [{query_type}] {token_info} {'ฟรี' if cost_thb == 0 else f'฿{cost_thb}'}")
 
             # ส่ง metadata chunk สุดท้าย
             cost_label = "ฟรี!" if cost_thb == 0 else f"฿{cost_thb}"
-            meta_content = f"\n\n---\n📡 {provider['name']} | {model} | {latency}ms | {total_t} tokens | {cost_label}"
+            meta_content = f"\n\n---\n📡 {provider['name']} | {model} | {latency}ms | {token_info} | {cost_label}"
             meta_chunk = {
                 "choices": [{"index": 0, "delta": {"content": meta_content, "role": "assistant"}, "finish_reason": None}]
             }

@@ -19,7 +19,7 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body className="min-h-full flex flex-col antialiased">{children}</body>
+      <body className="h-full flex flex-col overflow-hidden antialiased">{children}</body>
     </html>
   );
 }

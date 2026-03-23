@@ -67,9 +67,9 @@ export default function ProxyPage() {
         <Card className="border-[var(--clr-green)] border-l-4">
           <CardContent className="p-5">
             <h3 className="text-lg font-bold mb-3 text-[var(--clr-green)]">🔌 ตั้งค่า OpenClaw / แอปอื่น</h3>
-            <pre className="p-4 rounded-lg text-sm font-mono bg-secondary">{`OPENAI_API_BASE=http://127.0.0.1:8900/v1\nOPENAI_API_KEY=any\nMODEL_NAME=auto`}</pre>
+            <pre className="p-4 rounded-lg text-sm font-mono bg-secondary">{`OPENAI_API_BASE=https://airouter.satistang.com/v1\nOPENAI_API_KEY=any\nMODEL_NAME=auto`}</pre>
             <Button className="mt-3" size="sm"
-              onClick={() => navigator.clipboard.writeText("OPENAI_API_BASE=http://127.0.0.1:8900/v1\nOPENAI_API_KEY=any\nMODEL_NAME=auto")}>
+              onClick={() => navigator.clipboard.writeText("OPENAI_API_BASE=https://airouter.satistang.com/v1\nOPENAI_API_KEY=any\nMODEL_NAME=auto")}>
               📋 Copy
             </Button>
           </CardContent>
