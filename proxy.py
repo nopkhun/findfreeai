@@ -484,9 +484,9 @@ def forward_chat_stream(body_bytes, handler, model_override="", request_headers=
     # จะลบตอน forward แทน ไม่ลบที่นี่
     # ตัด system prompt ที่ยาวเกิน 2000 chars
     for msg in data.get("messages", []):
-        if msg.get("role") == "system" and isinstance(msg.get("content"), str) and len(msg["content"]) > 2000:
-            log.info(f"  ✂️ ตัด system prompt จาก {len(msg['content'])} → 2000 chars")
-            msg["content"] = msg["content"][:2000] + "\n\n[ตัดให้สั้นลง]"
+        if msg.get("role") == "system" and isinstance(msg.get("content"), str) and len(msg["content"]) > 8000:
+            log.info(f"  ✂️ ตัด system prompt จาก {len(msg['content'])} → 8000 chars")
+            msg["content"] = msg["content"][:8000] + "\n\n[ตัดให้สั้นลง]"
 
     # สำหรับ streaming: prefer Groq (ตอบ content ตรง ไม่มี reasoning field แปลก)
     # OpenRouter nemotron ส่ง reasoning แยก content ว่าง → OpenClaw ค้าง
@@ -685,8 +685,8 @@ def forward_chat(body_bytes, model_override="", request_headers=None):
 
     # === Payload optimization (ตัด system prompt ยาว) ===
     for msg in data.get("messages", []):
-        if msg.get("role") == "system" and isinstance(msg.get("content"), str) and len(msg["content"]) > 2000:
-            msg["content"] = msg["content"][:2000] + "\n\n[ตัดให้สั้นลง]"
+        if msg.get("role") == "system" and isinstance(msg.get("content"), str) and len(msg["content"]) > 8000:
+            msg["content"] = msg["content"][:8000] + "\n\n[ตัดให้สั้นลง]"
 
     # === Vision Detection ===
     has_image = False
