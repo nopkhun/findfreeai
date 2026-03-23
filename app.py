@@ -22,7 +22,7 @@ if sys.stdout.encoding != "utf-8":
     sys.stderr.reconfigure(encoding="utf-8")
 
 HOST = "0.0.0.0"
-PORT = 8899
+PORT = 8898  # Backend API — SvelteKit proxy มาจาก :8899
 JSON_FILE = "free_ai_apis.json"
 REQUEST_TIMEOUT = 15
 
