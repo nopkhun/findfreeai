@@ -125,31 +125,19 @@ export default function ChatPanel() {
   );
   const [followUps, setFollowUps] = useState<string[]>([]);
 
-  const generateFollowUps = async (userQ: string, aiAnswer: string) => {
-    try {
-      const r = await fetch("/v1/chat/completions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "auto",
-          messages: [
-            { role: "system", content: "สร้างคำถามต่อเนื่อง 5 ข้อ จากบทสนทนานี้ ตอบเป็น JSON array เท่านั้น เช่น [\"คำถาม1\",\"คำถาม2\",...] ห้ามมีข้อความอื่น" },
-            { role: "user", content: `คำถาม: ${userQ.slice(0, 100)}\nคำตอบ: ${aiAnswer.slice(0, 200)}` },
-          ],
-          max_tokens: 150,
-        }),
-      });
-      const d = await r.json();
-      const msg = d.choices?.[0]?.message || {};
-      const raw = msg.content || msg.reasoning || "";
-      const match = raw.match(/\[[\s\S]*\]/);
-      if (match) {
-        const arr = JSON.parse(match[0]);
-        if (Array.isArray(arr) && arr.length > 0) setFollowUps(arr.slice(0, 5));
-      }
-    } catch {
-      // follow-up ไม่สำคัญ — ถ้า fail ก็ไม่ต้องแสดง
-    }
+  const generateFollowUps = (userQ: string, _aiAnswer: string) => {
+    // สร้าง follow-up จาก template — ไม่เรียก API (เร็วทันที)
+    const templates = [
+      `อธิบายเพิ่มเติมเรื่อง "${userQ.slice(0, 20)}"`,
+      `ยกตัวอย่างเพิ่มให้หน่อย`,
+      `สรุปสั้นๆ ให้หน่อย`,
+      `เปรียบเทียบกับอย่างอื่น`,
+      `ข้อดีข้อเสียคืออะไร`,
+      `มีอะไรที่ควรระวังไหม`,
+      `ช่วยเขียนโค้ดตัวอย่างให้หน่อย`,
+      `อธิบายแบบง่ายๆ สำหรับมือใหม่`,
+    ];
+    setFollowUps([...templates].sort(() => Math.random() - 0.5).slice(0, 4));
   };
 
   return (
