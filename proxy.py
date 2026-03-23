@@ -644,7 +644,8 @@ def forward_chat_stream(body_bytes, handler, model_override="", request_headers=
             log.info(f"  ✅ STREAM {provider['name']} {latency}ms [{query_type}] {tokens_est}t ฿{cost_thb}")
 
             # ส่ง metadata chunk สุดท้าย — ให้ client รู้ว่าใช้ provider/model/cost อะไร
-            meta_content = f"\n\n---\n📡 {provider['name']} | {model} | {latency}ms | {tokens_est} tokens | ฿{cost_thb}"
+            cost_label = "ฟรี!" if cost_thb == 0 else f"฿{cost_thb}"
+            meta_content = f"\n\n---\n📡 {provider['name']} | {model} | {latency}ms | {tokens_est} tokens | {cost_label}"
             meta_chunk = {
                 "choices": [{"index": 0, "delta": {"content": meta_content, "role": "assistant"}, "finish_reason": None}]
             }

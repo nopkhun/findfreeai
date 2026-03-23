@@ -58,9 +58,20 @@ def _save():
         pass
 
 
-def _get_cost(model, input_tokens, output_tokens):
-    """คำนวณ cost ตาม model pricing"""
-    # ค้นหา model name ที่ตรง (อาจมี prefix เช่น groq/llama-3.3-70b)
+# Providers ที่ฟรี — cost = 0 เสมอ
+FREE_PROVIDERS = {"groq", "cerebras", "sambanova", "nvidia"}
+# OpenRouter models ที่มี :free = ฟรี
+
+
+def _get_cost(provider_id, model, input_tokens, output_tokens):
+    """คำนวณ cost ตาม model pricing — free tier = 0"""
+    # ฟรี: providers ที่ free tier หรือ model ลงท้ายด้วย :free
+    if provider_id in FREE_PROVIDERS:
+        return 0.0
+    if ":free" in model:
+        return 0.0
+
+    # ค้นหา model name ที่ตรง
     costs = MODEL_COSTS.get("_default")
     for key, val in MODEL_COSTS.items():
         if key in model:
@@ -77,7 +88,7 @@ def track_request(provider_id, model, input_tokens, output_tokens, latency_ms=0,
         _load()
 
     total_tokens = input_tokens + output_tokens
-    cost = _get_cost(model, input_tokens, output_tokens)
+    cost = _get_cost(provider_id, model, input_tokens, output_tokens)
 
     _tracking["total_requests"] += 1
     _tracking["total_tokens"]["input"] += input_tokens
