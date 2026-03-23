@@ -11,6 +11,7 @@
 
 	const tabs = [
 		{ id: 'dashboard', icon: '📡', label: 'Dashboard' },
+		{ id: 'chat', icon: '💬', label: 'Chat' },
 		{ id: 'keys', icon: '🔑', label: 'API Keys' },
 		{ id: 'tests', icon: '🧪', label: 'ผลทดสอบ' },
 		{ id: 'brain', icon: '🧠', label: 'AI วิเคราะห์' },
@@ -79,10 +80,10 @@
 		style="background: linear-gradient(135deg, var(--purple), #6e40c9);">
 		🧠 AI วิเคราะห์
 	</button>
-	<button onclick={doTestChat}
+	<button onclick={() => activeTab = 'chat'}
 		class="px-8 py-4 rounded-2xl text-lg font-bold cursor-pointer border"
 		style="border-color: var(--accent); color: var(--accent); background: var(--bg2);">
-		💬 ทดสอบ Chat
+		💬 เปิด Chat
 	</button>
 </div>
 
@@ -192,6 +193,8 @@
 	</div>
 </div>
 
+{:else if activeTab === 'chat'}
+	{#await import('./chat/+page.svelte') then { default: C }}<C />{/await}
 {:else if activeTab === 'keys'}
 	{#await import('./keys/+page.svelte') then { default: C }}<C />{/await}
 {:else if activeTab === 'tests'}
