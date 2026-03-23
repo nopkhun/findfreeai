@@ -514,6 +514,12 @@ def forward_chat(body_bytes, model_override="", request_headers=None):
         return 400, json.dumps({"error": {"message": "Invalid JSON"}})
 
     original_model = model_override or data.get("model", "")
+
+    # Auto mode: strip tools (streaming path)
+    if not original_model or original_model == "auto":
+        data.pop("tools", None)
+        data.pop("tool_choice", None)
+
     messages = data.get("messages", [])
 
     # === System Prompt: inject ถ้ายังไม่มี ===
