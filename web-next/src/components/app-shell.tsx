@@ -8,6 +8,7 @@ import ChatPanel from "@/components/chat-panel";
 
 const tabs = [
   { href: "/", icon: "📡", label: "Dashboard" },
+  { href: "/scores", icon: "📊", label: "Scores" },
   { href: "/keys", icon: "🔑", label: "API Keys" },
   { href: "/tests", icon: "🧪", label: "ผลทดสอบ" },
   { href: "/brain", icon: "🧠", label: "AI วิเคราะห์" },
