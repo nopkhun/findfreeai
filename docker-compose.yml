@@ -28,6 +28,7 @@ services:
     restart: unless-stopped
     ports:
       - "18790:18789"
+    command: --allow-unconfigured
     volumes:
       - ./openclaw-test:/home/node/.openclaw
     environment:
