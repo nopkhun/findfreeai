@@ -7,9 +7,11 @@ services:
     ports:
       - "8900:8900"   # AI Proxy (OpenAI-compatible)
     volumes:
-      - ./api_keys.json:/app/api_keys.json
-      - ./providers.json:/app/providers.json
-      - ./data:/app/data
+      - /opt/findfreeai/providers.json:/app/providers.json
+      - /opt/findfreeai/api_keys.json:/app/api_keys.json
+      - /opt/findfreeai/.env:/app/.env
+      - /opt/findfreeai/data:/app/data
+
     environment:
       - PYTHONIOENCODING=utf-8
       - TZ=Asia/Bangkok
@@ -29,8 +31,6 @@ services:
       - "18790:18789"
     volumes:
       - ./openclaw-test:/home/node/.openclaw
-      - /opt/findfreeai/api_keys.json:/app/api_keys.json
-      - /opt/findfreeai/.env:/app/.env
     environment:
       - HOME=/home/node
       - TZ=Asia/Bangkok
