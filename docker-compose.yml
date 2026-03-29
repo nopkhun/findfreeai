@@ -28,7 +28,6 @@ services:
     restart: unless-stopped
     ports:
       - "18790:18789"
-    command: --allow-unconfigured
     volumes:
       - ./openclaw-test:/home/node/.openclaw
     environment:
@@ -37,7 +36,7 @@ services:
       - FINDFREEAI_API_KEY=any
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
       - OPENCLAW_ALLOW_INSECURE_PRIVATE_WS=1
-    command: ["node", "openclaw.mjs", "gateway", "--bind", "lan", "--port", "18789"]
+    command: ["node", "openclaw.mjs", "gateway", "--bind", "lan", "--port", "18789", "--allow-unconfigured"]
     depends_on:
       - smlairouter
     extra_hosts:
