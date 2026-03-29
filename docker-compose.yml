@@ -37,6 +37,7 @@ services:
       - FINDFREEAI_API_KEY=any
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
       - OPENCLAW_ALLOW_INSECURE_PRIVATE_WS=1
+      - OPENCLAW_GATEWAY_CONTROLUI_DANGEROUSLYALLOWHOSTHEADERORIGINFALLBACK=true
     command: ["node", "openclaw.mjs", "gateway", "--bind", "lan", "--port", "18789", "--allow-unconfigured"]
     depends_on:
       - smlairouter
