@@ -25,6 +25,7 @@ services:
   openclaw:
     image: ghcr.io/openclaw/openclaw:latest
     container_name: smlairouter-openclaw
+    user: "root"
     restart: unless-stopped
     ports:
       - "18790:18789"
