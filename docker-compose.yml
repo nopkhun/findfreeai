@@ -40,14 +40,15 @@ services:
       - OPENCLAW_GATEWAY_CONTROLUI_DANGEROUSLYALLOWHOSTHEADERORIGINFALLBACK=true
     command:
       [
+        "node",
+        "/home/node/app/openclaw.mjs",
         "gateway",
         "--bind",
         "lan",
         "--port",
         "18789",
         "--set",
-        "gateway.mode=local",
-        "--allow-unconfigured"
+        "gateway.mode=local"
       ]
     depends_on:
       - smlairouter
