@@ -29,6 +29,8 @@ services:
       - "18790:18789"
     volumes:
       - ./openclaw-test:/home/node/.openclaw
+      - /opt/findfreeai/api_keys.json:/app/api_keys.json
+      - /opt/findfreeai/.env:/app/.env
     environment:
       - HOME=/home/node
       - TZ=Asia/Bangkok
