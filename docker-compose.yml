@@ -7,7 +7,6 @@ services:
     ports:
       - "8900:8900"   # AI Proxy (OpenAI-compatible)
     volumes:
-      - /opt/findfreeai/providers.json:/app/providers.json
       - /opt/findfreeai/api_keys.json:/app/api_keys.json
       - /opt/findfreeai/.env:/app/.env
       - /opt/findfreeai/data:/app/data
