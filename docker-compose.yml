@@ -2,7 +2,6 @@ services:
   # Proxy รันบน Docker
   smlairouter:
     build: .
-    container_name: smlairouter
     restart: unless-stopped
     ports:
       - "8900:8900"
@@ -23,7 +22,6 @@ services:
   # OpenClaw (ไม่ expose port ตรง)
   openclaw:
     image: ghcr.io/openclaw/openclaw:latest
-    container_name: smlairouter-openclaw
     user: "root"
     restart: unless-stopped
     volumes:
@@ -44,7 +42,6 @@ services:
   # 🔥 nginx proxy (ตัวสำคัญ)
   openclaw-proxy:
     image: nginx:alpine
-    container_name: openclaw-proxy
     restart: unless-stopped
     depends_on:
       - openclaw
