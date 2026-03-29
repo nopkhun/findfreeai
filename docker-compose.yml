@@ -5,12 +5,11 @@ services:
     container_name: smlairouter
     restart: unless-stopped
     ports:
-      - "8900:8900"   # AI Proxy (OpenAI-compatible)
+      - "8900:8900"
     volumes:
       - /opt/findfreeai/api_keys.json:/app/api_keys.json
       - /opt/findfreeai/.env:/app/.env
       - /opt/findfreeai/data:/app/data
-
     environment:
       - PYTHONIOENCODING=utf-8
       - TZ=Asia/Bangkok
@@ -21,14 +20,12 @@ services:
       retries: 3
       start_period: 10s
 
-  # OpenClaw Chat — ใช้ SML AI Router Proxy (port 18790)
+  # OpenClaw (ไม่ expose port ตรง)
   openclaw:
     image: ghcr.io/openclaw/openclaw:latest
     container_name: smlairouter-openclaw
     user: "root"
     restart: unless-stopped
-    ports:
-      - "18790:18789"
     volumes:
       - ./openclaw-test:/home/node/.openclaw
     environment:
@@ -39,18 +36,19 @@ services:
       - OPENCLAW_ALLOW_INSECURE_PRIVATE_WS=1
       - OPENCLAW_GATEWAY_CONTROLUI_DANGEROUSLYALLOWHOSTHEADERORIGINFALLBACK=true
       - OPENCLAW_GATEWAY_MODE=local
-      - OPENCLAW_BIND=0.0.0.0
-      - OPENCLAW_PORT=18789
     depends_on:
       - smlairouter
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:18789/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
-      interval: 30s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
 
-# Dashboard รันบน host (python app.py)
-# คำสั่ง: python app.py
+  # 🔥 nginx proxy (ตัวสำคัญ)
+  openclaw-proxy:
+    image: nginx:alpine
+    container_name: openclaw-proxy
+    restart: unless-stopped
+    depends_on:
+      - openclaw
+    ports:
+      - "18790:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf
