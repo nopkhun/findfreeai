@@ -38,8 +38,17 @@ services:
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
       - OPENCLAW_ALLOW_INSECURE_PRIVATE_WS=1
       - OPENCLAW_GATEWAY_CONTROLUI_DANGEROUSLYALLOWHOSTHEADERORIGINFALLBACK=true
-      - GATEWAY_MODE=local
-    command: ["node", "openclaw.mjs", "gateway", "--bind", "lan", "--port", "18789"]
+    command:
+      [
+        "gateway",
+        "--bind",
+        "lan",
+        "--port",
+        "18789",
+        "--set",
+        "gateway.mode=local",
+        "--allow-unconfigured"
+      ]
     depends_on:
       - smlairouter
     extra_hosts:
