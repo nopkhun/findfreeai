@@ -66,8 +66,13 @@ services:
     image: ghcr.io/openclaw/openclaw:latest
     user: "root"
     restart: unless-stopped
-    # image ใช้ entrypoint เป็น node อยู่แล้ว จึงต้องส่ง dist/index.js เป็น arg ตัวแรก
-    command: ["dist/index.js", "gateway", "--bind", "lan", "--port", "18789", "--allow-unconfigured"]
+    # บังคับ bootstrap config ก่อนรัน gateway เพื่อลดความเสี่ยงจาก volume state เดิม
+    entrypoint: ["/bin/sh", "-lc"]
+    command: >-
+      node dist/index.js config set gateway.mode local &&
+      node dist/index.js config set gateway.bind lan &&
+      node dist/index.js config set gateway.controlUi.dangerouslyAllowHostHeaderOriginFallback true &&
+      exec node dist/index.js gateway --bind lan --port 18789 --allow-unconfigured
     volumes:
       - openclaw-data:/home/node/.openclaw
     environment:

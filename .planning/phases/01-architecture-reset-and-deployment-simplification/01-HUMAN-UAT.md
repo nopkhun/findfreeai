@@ -3,7 +3,7 @@ status: passed
 phase: 01-architecture-reset-and-deployment-simplification
 source: [01-VERIFICATION.md]
 started: 2026-04-01T21:05:00+07:00
-updated: 2026-04-02T04:12:00+07:00
+updated: 2026-04-02T04:18:00+07:00
 ---
 
 ## Current Test
@@ -30,6 +30,7 @@ Domain routing follow-up on Coolify after commit `8dfe9dc` — `smlairouter` dom
 - Follow-up finding: setting `OPENCLAW_ARGS=--port=18789 --bind=lan` alone was not effective with current `ghcr.io/openclaw/openclaw:latest` image in Coolify (runtime still listened on loopback).
 - Follow-up finding #2: first command override attempt used `gateway` as first arg and failed with `Error: Cannot find module '/app/gateway'` because image entrypoint is `node` and expects script path first.
 - Follow-up finding #3: OpenClaw gateway now starts with correct script, but exits with `Gateway start blocked: set gateway.mode=local (current: unset)`.
+- Follow-up finding #4: after setting `gateway.mode` and `gateway.bind=lan`, OpenClaw still exits with `non-loopback Control UI requires gateway.controlUi.allowedOrigins ...`.
 
 ### Fix applied in repo
 
@@ -43,6 +44,9 @@ Domain routing follow-up on Coolify after commit `8dfe9dc` — `smlairouter` dom
 - Added startup guard bypass for fresh/uninitialized config state:
   - `command: ["dist/index.js", "gateway", "--bind", "lan", "--port", "18789", "--allow-unconfigured"]`
   - Reason: containerized first boot in this stack may not have `gateway.mode` initialized; this flag allows gateway startup without onboarding wizard.
+- Added explicit Control UI host-header fallback bootstrap in command chain:
+  - `node dist/index.js config set gateway.controlUi.dangerouslyAllowHostHeaderOriginFallback true`
+  - Reason: OpenClaw enforces explicit Control UI origin policy for non-loopback bind; this setting matches reverse-proxy deployment model on Coolify.
 
 ### Required re-test (pending)
 
