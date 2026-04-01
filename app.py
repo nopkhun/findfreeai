@@ -884,6 +884,37 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
       <div class="stat-card"><div class="label">GitHub Repos</div><div class="value" style="color:var(--purple)" id="sGithub">-</div></div>
       <div class="stat-card"><div class="label">โพสต์โซเชียล</div><div class="value" style="color:var(--yellow)" id="sSocial">-</div></div>
     </div>
+    <!-- Operational visibility -->
+    <div class="section">
+      <div class="section-title">🩺 สถานะผู้ให้บริการ</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>ผู้ให้บริการ</th><th>สถานะ</th><th>คูลดาวน์</th><th>สถิติ</th><th>แนวทางแก้ไข</th></tr></thead>
+          <tbody id="providerHealthTable"><tr><td colspan="5" class="empty">กำลังโหลดสถานะจาก /v1/providers...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">🔐 สถานะคีย์และคอนฟิก</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>หัวข้อ</th><th>สถานะ</th><th>รายละเอียด (ปกปิดแล้ว)</th><th>แนวทางแก้ไข</th></tr></thead>
+          <tbody id="configStatusTable"><tr><td colspan="4" class="empty">กำลังโหลดสถานะจาก /v1/config และ /v1/stats...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">🛟 คำแนะนำการแก้ไข</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>ลำดับความสำคัญ</th><th>อาการ</th><th>คำแนะนำ</th></tr></thead>
+          <tbody id="remediationTable"><tr><td colspan="3" class="empty">รอประมวลผลคำแนะนำจากสถานะจริง...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
     <!-- Proxy Live Log -->
     <div class="section">
       <div class="section-title">📡 Proxy Log (Real-time)</div>
@@ -1502,14 +1533,119 @@ async function pollProxyLog() {
   } catch(e){}
 }
 
+function renderOperationalStatus(status) {
+  const providers = (status && status.providers) || [];
+  const config = (status && status.config) || {};
+  const stats = (status && status.stats) || {};
+
+  const providerBody = document.getElementById('providerHealthTable');
+  const configBody = document.getElementById('configStatusTable');
+  const remediationBody = document.getElementById('remediationTable');
+  if (!providerBody || !configBody || !remediationBody) return;
+
+  if (!providers.length) {
+    providerBody.innerHTML = '<tr><td colspan="5" class="empty">ยังไม่พบข้อมูลผู้ให้บริการจาก /v1/providers</td></tr>';
+  } else {
+    providerBody.innerHTML = providers.map(p => {
+      const isDown = !p.has_key;
+      const statusText = isDown ? '🔴 DOWN' : '🟢 UP';
+      const statusClass = isDown ? 's-down' : 's-alive';
+      const cd = p.cooldown ? `${p.cooldown.remaining}s` : '-';
+      const s = p.stats || {};
+      const statsText = `สำเร็จ ${s.success||0} | ล้มเหลว ${s.fail||0} | avg ${s.avg_latency||0}ms`;
+      const fix = isDown
+        ? `ยังไม่ได้ตั้งค่า ${esc(p.id || p.name)} API key` 
+        : 'พร้อมใช้งาน';
+      return `<tr>
+        <td><strong>${esc(p.name || p.id)}</strong></td>
+        <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+        <td>${esc(cd)}</td>
+        <td style="font-size:13px;color:var(--text2)">${esc(statsText)}</td>
+        <td style="font-size:13px;color:${isDown?'var(--red)':'var(--green)'}">${esc(fix)}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  const mode = config.mode || '-';
+  const maxRetries = config.max_retries ?? '-';
+  const timeout = config.timeout ?? '-';
+  const providerDownCount = providers.filter(p => !p.has_key).length;
+  const hasWarning = providerDownCount > 0;
+  const warningText = hasWarning
+    ? `ยังไม่ได้ตั้งค่า key จำนวน ${providerDownCount} ผู้ให้บริการ`
+    : 'พร้อมใช้งานทุกผู้ให้บริการที่มีคีย์';
+  const maskedConfig = `mode=${mode}, retries=${maxRetries}, timeout=${timeout}s`;
+
+  configBody.innerHTML = `
+    <tr>
+      <td>โหมดการทำงาน</td>
+      <td><span class="status-badge s-alive">${esc(mode)}</span></td>
+      <td>${esc(maskedConfig)}</td>
+      <td>ตรวจสอบที่ /v1/config และปรับ mode ตามงาน</td>
+    </tr>
+    <tr>
+      <td>คีย์ผู้ให้บริการ</td>
+      <td><span class="status-badge ${hasWarning?'s-down':'s-alive'}">${hasWarning?'⚠️ มีคำเตือน':'✅ ปกติ'}</span></td>
+      <td>${esc(warningText)}</td>
+      <td>${hasWarning?'เพิ่ม key ใน api_keys.json หรือ env แล้วรีโหลด /v1/reload':'ไม่ต้องแก้ไข'}</td>
+    </tr>
+    <tr>
+      <td>สถานะสถิติ</td>
+      <td><span class="status-badge s-alive">พร้อมใช้งาน</span></td>
+      <td>มีข้อมูล request_log=${Object.keys(stats).length} providers</td>
+      <td>ดูรายละเอียดที่ /v1/stats</td>
+    </tr>
+  `;
+
+  const recommendations = [];
+  if (providerDownCount > 0) {
+    recommendations.push({
+      priority: 'สูง',
+      symptom: `พบผู้ให้บริการ DOWN ${providerDownCount} ราย`,
+      action: 'เติม API key ที่ขาด แล้วกดทดสอบคีย์ในแดชบอร์ด'
+    });
+  }
+  const cooldownProviders = providers.filter(p => p.cooldown);
+  if (cooldownProviders.length > 0) {
+    recommendations.push({
+      priority: 'กลาง',
+      symptom: `มีผู้ให้บริการติดคูลดาวน์ ${cooldownProviders.length} ราย`,
+      action: 'รอคูลดาวน์หมดหรือสลับ provider ด้วย mode=manual'
+    });
+  }
+  if (!recommendations.length) {
+    recommendations.push({
+      priority: 'ปกติ',
+      symptom: 'ไม่พบความผิดปกติสำคัญ',
+      action: 'ระบบพร้อมใช้งานต่อเนื่อง'
+    });
+  }
+  remediationBody.innerHTML = recommendations.map(r => `<tr>
+      <td>${esc(r.priority)}</td>
+      <td>${esc(r.symptom)}</td>
+      <td>${esc(r.action)}</td>
+    </tr>`).join('');
+}
+
+async function pollOperationalStatus() {
+  try {
+    const r = await fetch('/api/proxy-status?'+Date.now());
+    if(!r.ok) return;
+    const data = await r.json();
+    renderOperationalStatus(data);
+  } catch(e) {}
+}
+
 // Poll
 setInterval(pollLogs, 1500);
 setInterval(pollData, 5000);
 setInterval(pollBrain, 3000);
 setInterval(checkStatus, 2000);
 setInterval(pollProxyLog, 2000);
+setInterval(pollOperationalStatus, 5000);
 pollData();
 pollProxyLog();
+pollOperationalStatus();
 </script>
 </body>
 </html>"""
@@ -1694,6 +1830,32 @@ class Handler(BaseHTTPRequestHandler):
                     self._json(json.loads(r.read().decode("utf-8")))
             except Exception:
                 self._json([])
+        elif self.path.startswith("/api/proxy-status"):
+            try:
+                providers = []
+                config = {}
+                stats = {}
+                from urllib.request import urlopen
+
+                with urlopen("http://127.0.0.1:8900/v1/providers", timeout=3) as r:
+                    providers = json.loads(r.read().decode("utf-8")).get(
+                        "providers", []
+                    )
+                with urlopen("http://127.0.0.1:8900/v1/config", timeout=3) as r:
+                    config = json.loads(r.read().decode("utf-8"))
+                with urlopen("http://127.0.0.1:8900/v1/stats", timeout=3) as r:
+                    stats = json.loads(r.read().decode("utf-8")).get("stats", {})
+
+                self._json({"providers": providers, "config": config, "stats": stats})
+            except Exception as e:
+                self._json(
+                    {
+                        "providers": [],
+                        "config": {},
+                        "stats": {},
+                        "warning": f"ดึงสถานะ proxy ไม่สำเร็จ: {str(e)[:120]}",
+                    }
+                )
         elif self.path.startswith("/api/keys"):
             keys = load_api_keys()
             # Mask keys — แสดงแค่ 4 ตัวแรก + ***
