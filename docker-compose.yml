@@ -66,7 +66,8 @@ services:
     image: ghcr.io/openclaw/openclaw:latest
     user: "root"
     restart: unless-stopped
-    command: ["gateway", "--bind", "lan", "--port", "18789"]
+    # image ใช้ entrypoint เป็น node อยู่แล้ว จึงต้องส่ง dist/index.js เป็น arg ตัวแรก
+    command: ["dist/index.js", "gateway", "--bind", "lan", "--port", "18789"]
     volumes:
       - openclaw-data:/home/node/.openclaw
     environment:
