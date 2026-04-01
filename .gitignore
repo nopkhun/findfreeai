@@ -6,6 +6,7 @@ api_keys.json
 *.log
 free_ai_apis.json
 proxy_config.json
+openclaw.json
 data/
 openclaw-test/
 

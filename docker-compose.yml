@@ -1,49 +1,125 @@
+# ============================================================
+# SML AI Router — Coolify VPS Deployment
+# ============================================================
+#
+# วิธีตั้งค่าใน Coolify:
+#   1. ไปที่ Environment Variables ใน Coolify UI
+#   2. ใส่ Domain:
+#      DOMAIN_OPENCLAW=openclaw.yourdomain.com    ← UI สำหรับ OpenClaw
+#      DOMAIN_PROXY=proxy.yourdomain.com           ← AI Proxy API (optional)
+#   3. ใส่ API Keys อย่างน้อย 1 ตัว:
+#      GROQ_API_KEY=gsk_...
+#      OPENROUTER_API_KEY=sk-or-...
+#      ... (ดู .env.example สำหรับรายการทั้งหมด)
+#
+# OpenClaw ใน VPS นี้จะใช้ smlairouter โดยอัตโนมัติ
+# ============================================================
+
 services:
-  # Proxy รันบน Docker
+
+  # ─── AI Proxy (port 8900) ──────────────────────────────────
   smlairouter:
     build: .
     restart: unless-stopped
-    ports:
-      - "8900:8900"
     volumes:
-      - /opt/findfreeai/api_keys.json:/app/api_keys.json
-      - /opt/findfreeai/.env:/app/.env
-      - /opt/findfreeai/data:/app/data
+      - smlairouter-data:/app/data
     environment:
       - PYTHONIOENCODING=utf-8
       - TZ=Asia/Bangkok
+      # เก็บ api_keys.json ไว้ใน volume เพื่อ persist การแก้ไขผ่าน dashboard
+      - KEYS_FILE=/app/data/api_keys.json
+      # ─── API Keys — ตั้งค่าใน Coolify Environment Variables ───
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - CEREBRAS_API_KEY=${CEREBRAS_API_KEY:-}
+      - SAMBANOVA_API_KEY=${SAMBANOVA_API_KEY:-}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - NVIDIA_API_KEY=${NVIDIA_API_KEY:-}
+      - TOGETHER_API_KEY=${TOGETHER_API_KEY:-}
+      - MISTRAL_API_KEY=${MISTRAL_API_KEY:-}
+      - DEEPINFRA_API_KEY=${DEEPINFRA_API_KEY:-}
+      - COHERE_API_KEY=${COHERE_API_KEY:-}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8900/', timeout=5)"]
       interval: 30s
-      timeout: 5s
+      timeout: 10s
       retries: 3
-      start_period: 10s
+      start_period: 15s
+    networks:
+      - default
+      - coolify
+    labels:
+      - traefik.enable=true
+      # เปิด HTTP router (redirect → HTTPS)
+      - traefik.http.routers.smlairouter-http.rule=Host(`${DOMAIN_PROXY:-proxy.localhost}`)
+      - traefik.http.routers.smlairouter-http.entrypoints=http
+      - traefik.http.routers.smlairouter-http.middlewares=redirect-to-https
+      # HTTPS router
+      - traefik.http.routers.smlairouter.rule=Host(`${DOMAIN_PROXY:-proxy.localhost}`)
+      - traefik.http.routers.smlairouter.entrypoints=https
+      - traefik.http.routers.smlairouter.tls=true
+      - traefik.http.routers.smlairouter.tls.certresolver=letsencrypt
+      - traefik.http.services.smlairouter.loadbalancer.server.port=8900
 
-  # OpenClaw (ไม่ expose port ตรง)
+  # ─── OpenClaw AI Agent ────────────────────────────────────
   openclaw:
     image: ghcr.io/openclaw/openclaw:latest
     user: "root"
     restart: unless-stopped
     volumes:
-      - ./openclaw-test:/home/node/.openclaw
+      - openclaw-data:/home/node/.openclaw
     environment:
       - HOME=/home/node
       - TZ=Asia/Bangkok
+      # ── ชี้ไป smlairouter ภายใน Docker network เดียวกัน ──
+      - OPENAI_API_BASE=http://smlairouter:8900/v1
+      - OPENAI_API_KEY=any
+      - MODEL_NAME=auto
+      # Key สำหรับ OpenClaw ↔ smlairouter (ใส่ any = ไม่ต้อง auth)
       - FINDFREEAI_API_KEY=any
+      # OpenRouter fallback (optional — smlairouter จัดการให้แล้ว)
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      # OpenClaw settings
       - OPENCLAW_ALLOW_INSECURE_PRIVATE_WS=1
       - OPENCLAW_GATEWAY_CONTROLUI_DANGEROUSLYALLOWHOSTHEADERORIGINFALLBACK=true
-      - OPENCLAW_GATEWAY_MODE=local
+      - OPENCLAW_ARGS=--bind=lan --port=18789 --set gateway.mode=local
     depends_on:
-      - smlairouter
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      smlairouter:
+        condition: service_healthy
+    networks:
+      - default
 
-  # 🔥 nginx proxy (ตัวสำคัญ)
+  # ─── Nginx Reverse Proxy → OpenClaw ──────────────────────
   openclaw-proxy:
     image: nginx:alpine
     restart: unless-stopped
     depends_on:
       - openclaw
     volumes:
-      - ./nginx.conf:/etc/nginx/conf.d/default.conf
+      # mount เป็น nginx.conf หลัก (ไม่ใช่ conf.d เพราะไฟล์มี events{} block)
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    networks:
+      - default
+      - coolify
+    labels:
+      - traefik.enable=true
+      # HTTP → HTTPS redirect
+      - traefik.http.routers.openclaw-http.rule=Host(`${DOMAIN_OPENCLAW}`)
+      - traefik.http.routers.openclaw-http.entrypoints=http
+      - traefik.http.routers.openclaw-http.middlewares=redirect-to-https
+      # HTTPS
+      - traefik.http.routers.openclaw.rule=Host(`${DOMAIN_OPENCLAW}`)
+      - traefik.http.routers.openclaw.entrypoints=https
+      - traefik.http.routers.openclaw.tls=true
+      - traefik.http.routers.openclaw.tls.certresolver=letsencrypt
+      - traefik.http.services.openclaw.loadbalancer.server.port=80
+
+# ─── Named Volumes (persistent data) ──────────────────────
+volumes:
+  smlairouter-data:   # ChromaDB, conversations, api_keys.json
+  openclaw-data:      # OpenClaw config + workspace
+
+# ─── Networks ─────────────────────────────────────────────
+networks:
+  default:            # internal network (services คุยกันภายใน)
+  coolify:
+    external: true    # Coolify's Traefik network สำหรับ external access

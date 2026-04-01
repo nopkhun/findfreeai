@@ -217,7 +217,10 @@ def add_request_log(provider, model, status, latency, error="", reason="", inbou
 
 
 # ==================== KEY LOADING ====================
-KEYS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "api_keys.json")
+KEYS_FILE = os.environ.get(
+    "KEYS_FILE",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "api_keys.json")
+)
 
 def load_keys():
     keys = {}
@@ -228,7 +231,13 @@ def load_keys():
                 keys.update(json.load(f))
         except Exception:
             pass
-    # 2) จาก env vars (fallback)
+    # Normalize: แปลง lowercase provider ID → env_key format
+    # เช่น "groq" → "GROQ_API_KEY", "cerebras" → "CEREBRAS_API_KEY"
+    pid_to_envkey = {pid: p["env_key"] for pid, p in PROVIDERS.items()}
+    for pid, env_key in list(pid_to_envkey.items()):
+        if pid in keys and env_key not in keys:
+            keys[env_key] = keys.pop(pid)
+    # 2) จาก env vars (fallback) — สำคัญสำหรับ Coolify / Docker
     for pid, p in PROVIDERS.items():
         env_val = os.environ.get(p["env_key"], "")
         if env_val and p["env_key"] not in keys:
