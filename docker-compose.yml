@@ -63,16 +63,11 @@ services:
 
   # ─── OpenClaw AI Agent ────────────────────────────────────
   openclaw:
-    image: ghcr.io/openclaw/openclaw:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.openclaw
     user: "root"
     restart: unless-stopped
-    # บังคับ bootstrap config ก่อนรัน gateway เพื่อลดความเสี่ยงจาก volume state เดิม
-    entrypoint: ["/bin/sh", "-lc"]
-    command: >-
-      node dist/index.js config set gateway.mode local &&
-      node dist/index.js config set gateway.bind lan &&
-      node dist/index.js config set gateway.controlUi.dangerouslyAllowHostHeaderOriginFallback true &&
-      exec node dist/index.js gateway --bind lan --port 18789 --allow-unconfigured
     volumes:
       - openclaw-data:/home/node/.openclaw
     environment:
