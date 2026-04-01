@@ -99,13 +99,12 @@ services:
 
   # ─── Nginx Reverse Proxy → OpenClaw ──────────────────────
   openclaw-proxy:
-    image: nginx:alpine
+    build:
+      context: .
+      dockerfile: Dockerfile.nginx
     restart: unless-stopped
     depends_on:
       - openclaw
-    volumes:
-      # mount เป็น nginx.conf หลัก (ไม่ใช่ conf.d เพราะไฟล์มี events{} block)
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
     networks:
       - default
       - coolify
