@@ -62,3 +62,11 @@ Expected healthy output:
 - `CHECK / -> HTTP 200`
 - `CHECK /v1/models -> HTTP 200`
 - `CHECK /v1/chat/completions -> HTTP ...` (ยอมรับ 200/401/403/422/502/503)
+
+## Ops Commands
+
+```bash
+python scripts/ops.py restart --mode local
+python scripts/ops.py health --mode docker
+python scripts/ops.py logs --mode docker --lines 50
+```

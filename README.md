@@ -204,6 +204,14 @@ openrouter/nvidia/nemotron-3-super-120b-a12b:free  → OpenRouter free model
 - Forbidden files: `.env`, `api_keys.json`, `credentials*`, `*.secret`
 - คำสั่งก่อน commit (บังคับ): `python3 scripts/secret_guard.py --staged`
 
+## Ops Commands
+
+```bash
+python scripts/ops.py restart --mode local
+python scripts/ops.py health --mode docker
+python scripts/ops.py logs --mode docker --lines 50
+```
+
 
 ---
 
