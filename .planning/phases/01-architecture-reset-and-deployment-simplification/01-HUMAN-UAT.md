@@ -30,9 +30,7 @@ Domain routing follow-up on Coolify after commit `8dfe9dc` — `smlairouter` dom
 - Follow-up finding: setting `OPENCLAW_ARGS=--port=18789 --bind=lan` alone was not effective with current `ghcr.io/openclaw/openclaw:latest` image in Coolify (runtime still listened on loopback).
 - Follow-up finding #2: first command override attempt used `gateway` as first arg and failed with `Error: Cannot find module '/app/gateway'` because image entrypoint is `node` and expects script path first.
 - Follow-up finding #3: OpenClaw gateway now starts with correct script, but exits with `Gateway start blocked: set gateway.mode=local (current: unset)`.
-- Follow-up finding #4: after setting `gateway.mode` and `gateway.bind=lan`, OpenClaw still exits with `non-loopback Control UI requires gateway.controlUi.allowedOrigins ...`.
-
-### Fix applied in repo
+- Follow-up finding #5: switched from entrypoint chain to `Dockerfile.openclaw` with bootstrap script that writes config directly as JSON before launching gateway. This eliminates fragile entrypoint/command chains and makes startup deterministic.
 
 - Updated `docker-compose.yml` `openclaw` env:
   - `OPENCLAW_ARGS=--port=18789 --bind=lan`
