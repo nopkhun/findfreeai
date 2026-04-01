@@ -66,6 +66,7 @@ services:
     image: ghcr.io/openclaw/openclaw:latest
     user: "root"
     restart: unless-stopped
+    command: ["gateway", "--bind", "lan", "--port", "18789"]
     volumes:
       - openclaw-data:/home/node/.openclaw
     environment:
@@ -88,8 +89,8 @@ services:
       # ── OpenClaw gateway settings ──
       - OPENCLAW_ALLOW_INSECURE_PRIVATE_WS=1
       - OPENCLAW_GATEWAY_CONTROLUI_DANGEROUSLYALLOWHOSTHEADERORIGINFALLBACK=true
-      # ต้อง bind แบบ LAN เพื่อให้ nginx container เข้าถึง OpenClaw ผ่าน Docker network ได้
-      - OPENCLAW_ARGS=--port=18789 --bind=lan
+      # หมายเหตุ: image รุ่นปัจจุบันไม่รับประกันว่า OPENCLAW_ARGS จะถูกนำไปใช้เสมอ
+      # ใช้ command override ด้านบนเพื่อบังคับ bind/port แบบ deterministic
     depends_on:
       smlairouter:
         condition: service_healthy
