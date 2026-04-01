@@ -1,6 +1,11 @@
 # ความลับ — ห้าม commit
 .env
+.env.*
 api_keys.json
+credentials*
+*.secret
+*.pem
+*.key
 
 # ข้อมูล runtime
 *.log

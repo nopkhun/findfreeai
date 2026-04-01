@@ -97,3 +97,9 @@ Startup contract:
 
 - `run_all.py`, `find_free_ai.py`, `test_ai_apis.py`, and `dashboard.py` represent older workflow utilities and are **not canonical runtime startup paths** for this phase.
 - `web/` and `web-next/` remain optional/non-canonical until frontend direction is finalized.
+
+## Security Guardrails
+
+- Secret files that must never be committed: `.env`, `api_keys.json`, `credentials*`, `*.secret`.
+- Repository policy requires staged secret scan before every commit:
+  - `python3 scripts/secret_guard.py --staged`

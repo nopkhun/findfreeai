@@ -200,6 +200,8 @@ openrouter/nvidia/nemotron-3-super-120b-a12b:free  → OpenRouter free model
 - OpenClaw gateway ป้องกันด้วย auth token
 - ไม่ hardcode secrets ในโค้ด
 - ห้าม commit `.env`, `api_keys.json`
+- Forbidden files: `.env`, `api_keys.json`, `credentials*`, `*.secret`
+- คำสั่งก่อน commit (บังคับ): `python3 scripts/secret_guard.py --staged`
 
 ---
 
