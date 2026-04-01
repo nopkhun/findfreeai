@@ -20,11 +20,34 @@ from urllib.request import urlopen, Request
 from urllib.error import URLError, HTTPError
 
 from summarizer import detect_query_type
-from skill_engine import record_call, get_best_providers_for_type, classify_error, get_skill_summary, recompute_routing, get_scores
-from rag_memory import get_session_id_from_request, get_context_for_request, append_message, list_sessions, get_or_create_session, delete_session, cleanup_old_sessions
+from skill_engine import (
+    record_call,
+    get_best_providers_for_type,
+    classify_error,
+    get_skill_summary,
+    recompute_routing,
+    get_scores,
+)
+from rag_memory import (
+    get_session_id_from_request,
+    get_context_for_request,
+    append_message,
+    list_sessions,
+    get_or_create_session,
+    delete_session,
+    cleanup_old_sessions,
+)
 
 from cost_tracker import track_request, get_cost_summary, reset_tracking
-from virtual_keys import validate_key, record_usage, list_keys as list_vkeys, create_key, delete_key, toggle_key
+from virtual_keys import (
+    validate_key,
+    record_usage,
+    list_keys as list_vkeys,
+    create_key,
+    delete_key,
+    toggle_key,
+)
+from settings import validate_or_exit
 
 if sys.stdout.encoding != "utf-8":
     sys.stdout.reconfigure(encoding="utf-8")
@@ -43,7 +66,9 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
     handlers=[
-        RotatingFileHandler(PROXY_LOG, maxBytes=5*1024*1024, backupCount=3, encoding="utf-8"),
+        RotatingFileHandler(
+            PROXY_LOG, maxBytes=5 * 1024 * 1024, backupCount=3, encoding="utf-8"
+        ),
         logging.StreamHandler(),
     ],
 )
@@ -51,6 +76,7 @@ log = logging.getLogger("Proxy")
 
 # ==================== PROVIDER REGISTRY ====================
 # อ่านจาก providers.json — ไม่ hardcode, แก้ไขบน GitHub ได้เลย
+
 
 def load_providers():
     """โหลด providers จาก providers.json"""
@@ -69,7 +95,9 @@ def load_providers():
                 "api_base": p.get("api_base", ""),
                 "env_key": p.get("env_key", ""),
                 "models": models_dict,
-                "default_model": p.get("default_model", models_list[0] if models_list else ""),
+                "default_model": p.get(
+                    "default_model", models_list[0] if models_list else ""
+                ),
                 "priority": p.get("priority", 50),
                 "max_rpm": p.get("max_rpm", 0),
             }
@@ -77,6 +105,7 @@ def load_providers():
     except Exception as e:
         log.error(f"โหลด providers.json ไม่ได้: {e}")
         return {}
+
 
 PROVIDERS = load_providers()
 
@@ -96,9 +125,10 @@ active_config = {
 
 
 # ==================== SLIDING WINDOW + AUTO-SUMMARY ====================
-COMPACT_THRESHOLD = 20   # เริ่ม compact เมื่อ messages > N
-RECENT_KEEP = 10         # เก็บ N ข้อความล่าสุดแบบเต็ม
-summary_cache = {}       # session_id → summary string
+COMPACT_THRESHOLD = 20  # เริ่ม compact เมื่อ messages > N
+RECENT_KEEP = 10  # เก็บ N ข้อความล่าสุดแบบเต็ม
+summary_cache = {}  # session_id → summary string
+
 
 def compact_messages(messages):
     """Sliding Window + Auto-Summary: สรุปข้อความเก่า เก็บล่าสุดเต็มๆ
@@ -126,7 +156,9 @@ def compact_messages(messages):
         role = "User" if m.get("role") == "user" else "AI"
         content = m.get("content", "")
         if isinstance(content, list):
-            content = " ".join(p.get("text", "") if isinstance(p, dict) else str(p) for p in content)
+            content = " ".join(
+                p.get("text", "") if isinstance(p, dict) else str(p) for p in content
+            )
         # เก็บแค่ 80 ตัวอักษรแรกของแต่ละข้อความ
         short = str(content)[:80].replace("\n", " ")
         if short:
@@ -140,18 +172,20 @@ def compact_messages(messages):
 
     # ประกอบ messages ใหม่
     result = list(sys_msgs)  # system prompts ก่อน
-    result.append({
-        "role": "system",
-        "content": f"[สรุปบทสนทนาก่อนหน้า ({n_old} ข้อความ)]\n{summary_text}"
-    })
+    result.append(
+        {
+            "role": "system",
+            "content": f"[สรุปบทสนทนาก่อนหน้า ({n_old} ข้อความ)]\n{summary_text}",
+        }
+    )
     result.extend(recent_msgs)
     return result
 
 
 cooldowns = {}  # pid → timestamp เมื่อหมด cooldown
-COOLDOWN_429 = 30       # rate limit → cooldown 30 วินาที
-COOLDOWN_SLOW = 30      # ช้าเกิน 10 วินาที → cooldown 30 วินาที
-COOLDOWN_ERROR = 15     # error อื่น → cooldown 15 วินาที
+COOLDOWN_429 = 30  # rate limit → cooldown 30 วินาที
+COOLDOWN_SLOW = 30  # ช้าเกิน 10 วินาที → cooldown 30 วินาที
+COOLDOWN_ERROR = 15  # error อื่น → cooldown 15 วินาที
 SLOW_THRESHOLD_MS = 10000  # ช้าเกินนี้ → cooldown
 
 
@@ -172,8 +206,16 @@ def set_cooldown(pid, seconds, reason=""):
 
 def get_stats(pid):
     if pid not in stats:
-        stats[pid] = {"success": 0, "fail": 0, "avg_latency": 0, "total_latency": 0,
-                       "last_error": "", "last_ok": "", "rpm_count": 0, "rpm_start": 0}
+        stats[pid] = {
+            "success": 0,
+            "fail": 0,
+            "avg_latency": 0,
+            "total_latency": 0,
+            "last_error": "",
+            "last_ok": "",
+            "rpm_count": 0,
+            "rpm_start": 0,
+        }
     return stats[pid]
 
 
@@ -199,7 +241,9 @@ def record_fail(pid, err):
         set_cooldown(pid, COOLDOWN_ERROR, str(err)[:50])
 
 
-def add_request_log(provider, model, status, latency, error="", reason="", inbound="", outbound=""):
+def add_request_log(
+    provider, model, status, latency, error="", reason="", inbound="", outbound=""
+):
     entry = {
         "time": datetime.now().strftime("%H:%M:%S.%f")[:-3],
         "provider": provider,
@@ -219,8 +263,9 @@ def add_request_log(provider, model, status, latency, error="", reason="", inbou
 # ==================== KEY LOADING ====================
 KEYS_FILE = os.environ.get(
     "KEYS_FILE",
-    os.path.join(os.path.dirname(os.path.abspath(__file__)), "api_keys.json")
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "api_keys.json"),
 )
+
 
 def load_keys():
     keys = {}
@@ -269,8 +314,16 @@ def get_available_providers():
         # Cooldown: ข้ามไปก่อน แต่เก็บไว้ fallback สุดท้าย
         if is_cooled_down(pid):
             remaining = round(cooldowns.get(pid, 0) - time.time())
-            cooled.append({"id": pid, **p, "api_key": key, "dp": -999, "stats": get_stats(pid),
-                          "cooldown_remaining": remaining})
+            cooled.append(
+                {
+                    "id": pid,
+                    **p,
+                    "api_key": key,
+                    "dp": -999,
+                    "stats": get_stats(pid),
+                    "cooldown_remaining": remaining,
+                }
+            )
             continue
         s = get_stats(pid)
         dp = p["priority"]
@@ -333,6 +386,7 @@ def save_config():
 
 round_robin_idx = 0
 
+
 def resolve_provider_model(model_str):
     """
     Parse model string:
@@ -344,7 +398,9 @@ def resolve_provider_model(model_str):
 
     if not model_str or model_str == "auto":
         providers = get_available_providers()
-        if active_config["mode"] == "manual" and active_config.get("preferred_provider"):
+        if active_config["mode"] == "manual" and active_config.get(
+            "preferred_provider"
+        ):
             # Manual mode: use preferred
             pp = active_config["preferred_provider"]
             for p in providers:
@@ -360,15 +416,19 @@ def resolve_provider_model(model_str):
         # + Explore: ทุก 10 requests ลอง model ใหม่เพื่อเก็บ data
         try:
             from skill_engine import load_skill_db
+
             db = load_skill_db()
             total_req = db.get("total_requests", 0)
-            explore = (total_req % 10 == 0)  # ทุก 10 requests = explore mode
+            explore = total_req % 10 == 0  # ทุก 10 requests = explore mode
 
             if explore and total_req > 20:
                 # Explore: สุ่มเลือก model ที่ยังไม่มี data — เฉพาะ provider ที่เร็ว
                 import random
+
                 # เฉพาะ provider ที่ไม่ใช่ OpenRouter (ช้า) และไม่ cooldown
-                fast_providers = [p for p in providers if p["id"] not in ("openrouter",)]
+                fast_providers = [
+                    p for p in providers if p["id"] not in ("openrouter",)
+                ]
                 if not fast_providers:
                     fast_providers = providers
                 all_models = []
@@ -403,7 +463,9 @@ def resolve_provider_model(model_str):
                             if p["id"] == rpid:
                                 mid = ranked["id"]
                                 model_name = mid.split("/", 1)[1] if "/" in mid else mid
-                                log.info(f"  🎯 Auto-select: {mid} (score={ranked['score']} grade={ranked['grade']})")
+                                log.info(
+                                    f"  🎯 Auto-select: {mid} (score={ranked['score']} grade={ranked['grade']})"
+                                )
                                 result = [(p, model_name)]
                                 for p2 in providers:
                                     if p2["id"] != rpid:
@@ -442,6 +504,7 @@ def resolve_provider_model(model_str):
 
 # ==================== STREAMING FORWARD ====================
 
+
 def forward_chat_stream(body_bytes, handler, model_override="", request_headers=None):
     """Forward chat completion as SSE stream — ส่งทีละ chunk"""
     try:
@@ -450,7 +513,9 @@ def forward_chat_stream(body_bytes, handler, model_override="", request_headers=
         handler.send_response(400)
         handler.send_header("Content-Type", "application/json")
         handler.end_headers()
-        handler.wfile.write(json.dumps({"error": {"message": "Invalid JSON"}}).encode("utf-8"))
+        handler.wfile.write(
+            json.dumps({"error": {"message": "Invalid JSON"}}).encode("utf-8")
+        )
         return
 
     original_model = model_override or data.get("model", "")
@@ -483,7 +548,13 @@ def forward_chat_stream(body_bytes, handler, model_override="", request_headers=
     for m in reversed(messages):
         if m.get("role") == "user":
             c = m["content"]
-            last_user_msg = " ".join(p.get("text","") if isinstance(p,dict) else str(p) for p in c) if isinstance(c, list) else str(c)
+            last_user_msg = (
+                " ".join(
+                    p.get("text", "") if isinstance(p, dict) else str(p) for p in c
+                )
+                if isinstance(c, list)
+                else str(c)
+            )
             break
 
     query_type = detect_query_type(last_user_msg) if last_user_msg else "chat"
@@ -501,7 +572,11 @@ def forward_chat_stream(body_bytes, handler, model_override="", request_headers=
     # จะลบตอน forward แทน ไม่ลบที่นี่
     # ตัด system prompt ที่ยาวเกิน 2000 chars
     for msg in data.get("messages", []):
-        if msg.get("role") == "system" and isinstance(msg.get("content"), str) and len(msg["content"]) > 8000:
+        if (
+            msg.get("role") == "system"
+            and isinstance(msg.get("content"), str)
+            and len(msg["content"]) > 8000
+        ):
             log.info(f"  ✂️ ตัด system prompt จาก {len(msg['content'])} → 8000 chars")
             msg["content"] = msg["content"][:8000] + "\n\n[ตัดให้สั้นลง]"
 
@@ -515,7 +590,9 @@ def forward_chat_stream(body_bytes, handler, model_override="", request_headers=
         handler.send_response(503)
         handler.send_header("Content-Type", "application/json")
         handler.end_headers()
-        handler.wfile.write(json.dumps({"error": {"message": "ไม่มี provider พร้อมใช้!"}}).encode("utf-8"))
+        handler.wfile.write(
+            json.dumps({"error": {"message": "ไม่มี provider พร้อมใช้!"}}).encode("utf-8")
+        )
         return
 
     # === Vision Detection: ถ้ามีรูป → ใช้ OpenRouter (vision model ฟรี) ===
@@ -530,7 +607,11 @@ def forward_chat_stream(body_bytes, handler, model_override="", request_headers=
 
     if has_image:
         log.info("  🖼️ พบรูปภาพ → route ไป OpenRouter เท่านั้น (vision model)")
-        vision_targets = [(t[0], "qwen/qwen-2.5-vl-72b-instruct:free") for t in targets if t[0]["id"] == "openrouter"]
+        vision_targets = [
+            (t[0], "qwen/qwen-2.5-vl-72b-instruct:free")
+            for t in targets
+            if t[0]["id"] == "openrouter"
+        ]
         if vision_targets:
             targets = vision_targets  # ใช้ OpenRouter เท่านั้น — provider อื่นไม่รองรับรูป
         else:
@@ -544,9 +625,11 @@ def forward_chat_stream(body_bytes, handler, model_override="", request_headers=
 
     best_order = get_best_providers_for_type(query_type)
     if best_order:
+
         def sort_key(t):
             pid = t[0]["id"]
             return best_order.index(pid) if pid in best_order else 999
+
         targets.sort(key=sort_key)
 
     max_tries = min(active_config.get("max_retries", 3), len(targets))
@@ -574,7 +657,9 @@ def forward_chat_stream(body_bytes, handler, model_override="", request_headers=
             "User-Agent": "Mozilla/5.0 SMLAIRouter/2.0",
         }
 
-        log.info(f"[STREAM {i+1}/{max_tries}] {provider['name']} → {model} (tools={'Y' if 'tools' in send_data else 'N'})")
+        log.info(
+            f"[STREAM {i + 1}/{max_tries}] {provider['name']} → {model} (tools={'Y' if 'tools' in send_data else 'N'})"
+        )
         start = time.time()
 
         try:
@@ -597,7 +682,9 @@ def forward_chat_stream(body_bytes, handler, model_override="", request_headers=
                 decoded = line.decode("utf-8", errors="replace")
 
                 # Normalize stream chunks: เพิ่ม role ทุก chunk + ลบ fields ที่ OpenClaw ไม่เข้าใจ
-                if decoded.startswith("data: ") and not decoded.startswith("data: [DONE]"):
+                if decoded.startswith("data: ") and not decoded.startswith(
+                    "data: [DONE]"
+                ):
                     try:
                         chunk = json.loads(decoded[6:])
                         delta = chunk.get("choices", [{}])[0].get("delta", {})
@@ -611,14 +698,26 @@ def forward_chat_stream(body_bytes, handler, model_override="", request_headers=
                             delta["content"] = delta["reasoning"]
 
                         # ลบ fields ที่ OpenClaw อาจ parse ไม่ได้
-                        for key in ["logprobs", "x_groq", "system_fingerprint", "reasoning", "reasoning_details", "reasoning_content"]:
+                        for key in [
+                            "logprobs",
+                            "x_groq",
+                            "system_fingerprint",
+                            "reasoning",
+                            "reasoning_details",
+                            "reasoning_content",
+                        ]:
                             delta.pop(key, None)
                             chunk.pop(key, None)
                         choice = chunk.get("choices", [{}])[0]
                         choice.pop("logprobs", None)
                         choice.pop("native_finish_reason", None)
                         # ลบ fields ระดับ chunk
-                        for key in ["provider", "service_tier", "nvext", "usage_breakdown"]:
+                        for key in [
+                            "provider",
+                            "service_tier",
+                            "nvext",
+                            "usage_breakdown",
+                        ]:
                             chunk.pop(key, None)
 
                         # Collect content + usage
@@ -629,7 +728,9 @@ def forward_chat_stream(body_bytes, handler, model_override="", request_headers=
                         chunk_usage = chunk.get("usage")
                         if chunk_usage:
                             stream_usage["prompt"] = chunk_usage.get("prompt_tokens", 0)
-                            stream_usage["completion"] = chunk_usage.get("completion_tokens", 0)
+                            stream_usage["completion"] = chunk_usage.get(
+                                "completion_tokens", 0
+                            )
                             stream_usage["total"] = chunk_usage.get("total_tokens", 0)
 
                         # ข้าม chunk ที่ไม่มี content (: OPENROUTER PROCESSING)
@@ -637,7 +738,9 @@ def forward_chat_stream(body_bytes, handler, model_override="", request_headers=
                             continue
 
                         # เขียน chunk ที่ normalize แล้ว
-                        normalized = f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
+                        normalized = (
+                            f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
+                        )
                         handler.wfile.write(normalized.encode("utf-8"))
                         handler.wfile.flush()
                         continue
@@ -662,22 +765,44 @@ def forward_chat_stream(body_bytes, handler, model_override="", request_headers=
             input_t = stream_usage["prompt"] or 0
             output_t = stream_usage["completion"] or max(1, len(full_content) // 4)
             total_t = stream_usage["total"] or (input_t + output_t)
-            cost_info = track_request(pid, model, input_t, output_t, latency, provider.get("api_key", "")[:8])
+            cost_info = track_request(
+                pid, model, input_t, output_t, latency, provider.get("api_key", "")[:8]
+            )
             cost_thb = round(cost_info.get("cost_usd", 0) * 35, 4)
 
-            token_info = f"in:{input_t} out:{output_t}" if input_t > 0 else f"~{output_t} tokens"
-            add_request_log(provider["name"], model, "ok", latency,
+            token_info = (
+                f"in:{input_t} out:{output_t}" if input_t > 0 else f"~{output_t} tokens"
+            )
+            add_request_log(
+                provider["name"],
+                model,
+                "ok",
+                latency,
                 reason=f"Stream: {query_type} | {token_info} | {'ฟรี' if cost_thb == 0 else f'฿{cost_thb}'}",
-                inbound=last_user_msg, outbound=full_content)
-            log.info(f"  ✅ STREAM {provider['name']} {latency}ms [{query_type}] {token_info} {'ฟรี' if cost_thb == 0 else f'฿{cost_thb}'}")
+                inbound=last_user_msg,
+                outbound=full_content,
+            )
+            log.info(
+                f"  ✅ STREAM {provider['name']} {latency}ms [{query_type}] {token_info} {'ฟรี' if cost_thb == 0 else f'฿{cost_thb}'}"
+            )
 
             # ส่ง metadata chunk สุดท้าย
             cost_label = "ฟรี!" if cost_thb == 0 else f"฿{cost_thb}"
             meta_content = f"\n\n---\n📡 {provider['name']} | {model} | {latency}ms | {token_info} | {cost_label}"
             meta_chunk = {
-                "choices": [{"index": 0, "delta": {"content": meta_content, "role": "assistant"}, "finish_reason": None}]
+                "choices": [
+                    {
+                        "index": 0,
+                        "delta": {"content": meta_content, "role": "assistant"},
+                        "finish_reason": None,
+                    }
+                ]
             }
-            handler.wfile.write(f"data: {json.dumps(meta_chunk, ensure_ascii=False)}\n\n".encode("utf-8"))
+            handler.wfile.write(
+                f"data: {json.dumps(meta_chunk, ensure_ascii=False)}\n\n".encode(
+                    "utf-8"
+                )
+            )
             handler.wfile.flush()
 
             # ส่ง DONE
@@ -689,7 +814,14 @@ def forward_chat_stream(body_bytes, handler, model_override="", request_headers=
             latency = round((time.time() - start) * 1000)
             last_err = f"HTTP {e.code}: {e.reason}"
             record_fail(pid, last_err)
-            record_call(pid, query_type, latency, False, classify_error(e.code, last_err), model_id=model)
+            record_call(
+                pid,
+                query_type,
+                latency,
+                False,
+                classify_error(e.code, last_err),
+                model_id=model,
+            )
             add_request_log(provider["name"], model, "fail", latency, last_err)
             log.warning(f"  ❌ STREAM {provider['name']}: {last_err}")
             continue
@@ -697,7 +829,14 @@ def forward_chat_stream(body_bytes, handler, model_override="", request_headers=
             latency = round((time.time() - start) * 1000)
             last_err = str(e)[:100]
             record_fail(pid, last_err)
-            record_call(pid, query_type, latency, False, classify_error(0, last_err), model_id=model)
+            record_call(
+                pid,
+                query_type,
+                latency,
+                False,
+                classify_error(0, last_err),
+                model_id=model,
+            )
             add_request_log(provider["name"], model, "fail", latency, last_err)
             log.warning(f"  ❌ STREAM {provider['name']}: {last_err}")
             continue
@@ -707,10 +846,13 @@ def forward_chat_stream(body_bytes, handler, model_override="", request_headers=
     handler.send_header("Content-Type", "application/json")
     handler.send_header("Access-Control-Allow-Origin", "*")
     handler.end_headers()
-    handler.wfile.write(json.dumps({"error": {"message": "ทุก provider ล้มเหลว"}}).encode("utf-8"))
+    handler.wfile.write(
+        json.dumps({"error": {"message": "ทุก provider ล้มเหลว"}}).encode("utf-8")
+    )
 
 
 # ==================== FORWARD REQUEST ====================
+
 
 def forward_chat(body_bytes, model_override="", request_headers=None):
     """Forward chat completion request with failover + RAG + Skill"""
@@ -748,7 +890,13 @@ def forward_chat(body_bytes, model_override="", request_headers=None):
     for m in reversed(messages):
         if m.get("role") == "user":
             c = m["content"]
-            last_user_msg = " ".join(p.get("text","") if isinstance(p,dict) else str(p) for p in c) if isinstance(c, list) else str(c)
+            last_user_msg = (
+                " ".join(
+                    p.get("text", "") if isinstance(p, dict) else str(p) for p in c
+                )
+                if isinstance(c, list)
+                else str(c)
+            )
             break
     # if session_id != "default" and not _has_image_in_msg:
     #     data["messages"] = get_context_for_request(session_id, messages)
@@ -757,7 +905,11 @@ def forward_chat(body_bytes, model_override="", request_headers=None):
 
     # === Payload optimization (ตัด system prompt ยาว) ===
     for msg in data.get("messages", []):
-        if msg.get("role") == "system" and isinstance(msg.get("content"), str) and len(msg["content"]) > 8000:
+        if (
+            msg.get("role") == "system"
+            and isinstance(msg.get("content"), str)
+            and len(msg["content"]) > 8000
+        ):
             msg["content"] = msg["content"][:8000] + "\n\n[ตัดให้สั้นลง]"
 
     # === Vision Detection ===
@@ -777,24 +929,29 @@ def forward_chat(body_bytes, model_override="", request_headers=None):
         log.info("  🖼️ พบรูปภาพ → route ไป OpenRouter (vision)")
         vision_targets = [t for t in targets if t[0]["id"] == "openrouter"]
         if vision_targets:
-            targets = [(t[0], "qwen/qwen-2.5-vl-72b-instruct:free") for t in vision_targets] + \
-                      [t for t in targets if t[0]["id"] != "openrouter"]
+            targets = [
+                (t[0], "qwen/qwen-2.5-vl-72b-instruct:free") for t in vision_targets
+            ] + [t for t in targets if t[0]["id"] != "openrouter"]
 
     if not targets:
-        return 503, json.dumps({
-            "error": {
-                "message": "ไม่มี provider พร้อมใช้! ใส่ API key ใน api_keys.json ก่อน",
-                "type": "no_providers",
-                "help": "ดูวิธีสมัครที่ http://127.0.0.1:8899 แท็บ 'วิธีสมัคร Key'",
+        return 503, json.dumps(
+            {
+                "error": {
+                    "message": "ไม่มี provider พร้อมใช้! ใส่ API key ใน api_keys.json ก่อน",
+                    "type": "no_providers",
+                    "help": "ดูวิธีสมัครที่ http://127.0.0.1:8899 แท็บ 'วิธีสมัคร Key'",
+                }
             }
-        })
+        )
 
     # Reorder by learned skill (ถ้ามีข้อมูลเพียงพอ)
     best_order = get_best_providers_for_type(query_type)
     if best_order:
+
         def sort_key(t):
             pid = t[0]["id"]
             return best_order.index(pid) if pid in best_order else 999
+
         targets.sort(key=sort_key)
 
     max_tries = min(active_config.get("max_retries", 3), len(targets))
@@ -820,7 +977,7 @@ def forward_chat(body_bytes, model_override="", request_headers=None):
             "User-Agent": "Mozilla/5.0 SMLAIRouter/2.0",
         }
 
-        log.info(f"[{i+1}/{max_tries}] {provider['name']} → {model}")
+        log.info(f"[{i + 1}/{max_tries}] {provider['name']} → {model}")
         start = time.time()
 
         try:
@@ -841,7 +998,9 @@ def forward_chat(body_bytes, model_override="", request_headers=None):
                     msg_obj = resp_data.get("choices", [{}])[0].get("message", {})
                     if not msg_obj.get("content") and msg_obj.get("reasoning"):
                         msg_obj["content"] = msg_obj["reasoning"]
-                        log.info(f"  🔧 Normalize: reasoning → content ({len(msg_obj['content'])} chars)")
+                        log.info(
+                            f"  🔧 Normalize: reasoning → content ({len(msg_obj['content'])} chars)"
+                        )
                     ai_content = msg_obj.get("content", "")
 
                     # Log request หลังจากได้ ai_content แล้ว
@@ -851,13 +1010,22 @@ def forward_chat(body_bytes, model_override="", request_headers=None):
                     elif i == 0:
                         _reason = f"Priority สูงสุด"
                     else:
-                        _reason = f"Failover (attempt {i+1})"
-                    add_request_log(provider["name"], model, "ok", latency, reason=_reason,
-                        inbound=last_user_msg, outbound=ai_content)
+                        _reason = f"Failover (attempt {i + 1})"
+                    add_request_log(
+                        provider["name"],
+                        model,
+                        "ok",
+                        latency,
+                        reason=_reason,
+                        inbound=last_user_msg,
+                        outbound=ai_content,
+                    )
 
                     # ถ้า content เป็น None/empty → ถือว่า fail (model ตอบไม่ได้)
                     if not ai_content:
-                        log.warning(f"  ⚠️ {provider['name']}/{model} ตอบ content=null — นับเป็น fail")
+                        log.warning(
+                            f"  ⚠️ {provider['name']}/{model} ตอบ content=null — นับเป็น fail"
+                        )
                         record_fail(pid, "content_null")
                         set_cooldown(pid, COOLDOWN_ERROR, f"content=null from {model}")
 
@@ -866,20 +1034,33 @@ def forward_chat(body_bytes, model_override="", request_headers=None):
                     # สร้าง reason ว่าทำไมเลือก provider นี้
                     reason_parts = []
                     if best_order and pid in best_order:
-                        reason_parts.append(f"Skill Engine เรียนรู้ว่า '{query_type}' ใช้ {pid} ดีที่สุด")
+                        reason_parts.append(
+                            f"Skill Engine เรียนรู้ว่า '{query_type}' ใช้ {pid} ดีที่สุด"
+                        )
                     elif i == 0:
-                        reason_parts.append(f"Priority สูงสุด ({provider.get('dp', provider.get('priority', 0))})")
+                        reason_parts.append(
+                            f"Priority สูงสุด ({provider.get('dp', provider.get('priority', 0))})"
+                        )
                     else:
-                        reason_parts.append(f"Failover จากตัวก่อนหน้า (attempt {i+1})")
+                        reason_parts.append(f"Failover จากตัวก่อนหน้า (attempt {i + 1})")
                     s = get_stats(pid)
                     if s["success"] > 0:
-                        reason_parts.append(f"avg {s['avg_latency']}ms, success {s['success']}")
+                        reason_parts.append(
+                            f"avg {s['avg_latency']}ms, success {s['success']}"
+                        )
 
                     # === Cost Tracking ===
                     usage = resp_data.get("usage", {})
                     input_tokens = usage.get("prompt_tokens", 0)
                     output_tokens = usage.get("completion_tokens", 0)
-                    cost_info = track_request(pid, model, input_tokens, output_tokens, latency, provider.get("api_key", "")[:8])
+                    cost_info = track_request(
+                        pid,
+                        model,
+                        input_tokens,
+                        output_tokens,
+                        latency,
+                        provider.get("api_key", "")[:8],
+                    )
 
                     resp_data["_proxy"] = {
                         "provider": provider["name"],
@@ -920,40 +1101,45 @@ def forward_chat(body_bytes, model_override="", request_headers=None):
             log.warning(f"  ❌ {provider['name']}: {last_err}")
             continue
 
-    return 502, json.dumps({
-        "error": {
-            "message": f"ทุก provider ล้มเหลว: {last_err}",
-            "type": "all_failed",
-            "tried": [t[0]["name"] for t in targets[:max_tries]],
+    return 502, json.dumps(
+        {
+            "error": {
+                "message": f"ทุก provider ล้มเหลว: {last_err}",
+                "type": "all_failed",
+                "tried": [t[0]["name"] for t in targets[:max_tries]],
+            }
         }
-    })
+    )
 
 
 # ==================== HTTP HANDLER ====================
 
-class ProxyHandler(BaseHTTPRequestHandler):
 
+class ProxyHandler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
         self._cors(200)
 
     def do_GET(self):
         if self.path == "/":
-            self._json(200, {
-                "name": "SML AI Router",
-                "version": "2.0",
-                "description": "OpenRouter-style AI Gateway — ใช้เหมือน OpenAI API",
-                "endpoints": {
-                    "chat": "/v1/chat/completions",
-                    "models": "/v1/models",
-                    "providers": "/v1/providers",
-                    "stats": "/v1/stats",
-                    "config": "/v1/config",
-                    "logs": "/v1/logs",
+            self._json(
+                200,
+                {
+                    "name": "SML AI Router",
+                    "version": "2.0",
+                    "description": "OpenRouter-style AI Gateway — ใช้เหมือน OpenAI API",
+                    "endpoints": {
+                        "chat": "/v1/chat/completions",
+                        "models": "/v1/models",
+                        "providers": "/v1/providers",
+                        "stats": "/v1/stats",
+                        "config": "/v1/config",
+                        "logs": "/v1/logs",
+                    },
+                    "model_format": "provider/model (เช่น groq/llama-3.3-70b-versatile) หรือ auto",
+                    "config_mode": active_config["mode"],
+                    "available_providers": len(get_available_providers()),
                 },
-                "model_format": "provider/model (เช่น groq/llama-3.3-70b-versatile) หรือ auto",
-                "config_mode": active_config["mode"],
-                "available_providers": len(get_available_providers()),
-            })
+            )
 
         elif self.path.startswith("/v1/models"):
             self._handle_models()
@@ -966,13 +1152,21 @@ class ProxyHandler(BaseHTTPRequestHandler):
             cd_info = {}
             for pid, expire_at in cooldowns.items():
                 remaining = round(expire_at - time.time())
-                cd_info[pid] = {"remaining_seconds": max(0, remaining), "expires_at": datetime.fromtimestamp(expire_at).strftime("%H:%M:%S")}
-            self._json(200, {
-                "stats": stats,
-                "cooldowns": cd_info,
-                "request_log": request_log[-50:],
-                "config": active_config,
-            })
+                cd_info[pid] = {
+                    "remaining_seconds": max(0, remaining),
+                    "expires_at": datetime.fromtimestamp(expire_at).strftime(
+                        "%H:%M:%S"
+                    ),
+                }
+            self._json(
+                200,
+                {
+                    "stats": stats,
+                    "cooldowns": cd_info,
+                    "request_log": request_log[-50:],
+                    "config": active_config,
+                },
+            )
 
         elif self.path.startswith("/v1/config"):
             self._json(200, active_config)
@@ -982,11 +1176,15 @@ class ProxyHandler(BaseHTTPRequestHandler):
 
         elif self.path.startswith("/v1/keys"):
             keys = load_keys()
-            safe = {k: (v[:8] + "..." if len(v) > 8 else "***") for k, v in keys.items()}
+            safe = {
+                k: (v[:8] + "..." if len(v) > 8 else "***") for k, v in keys.items()
+            }
             self._json(200, {"keys": safe, "count": len(keys)})
 
         elif self.path.startswith("/v1/cache"):
-            self._json(200, {"status": "disabled", "message": "Semantic cache ถูกยกเลิกแล้ว"})
+            self._json(
+                200, {"status": "disabled", "message": "Semantic cache ถูกยกเลิกแล้ว"}
+            )
 
         elif self.path.startswith("/v1/scores"):
             self._json(200, get_scores())
@@ -1002,7 +1200,9 @@ class ProxyHandler(BaseHTTPRequestHandler):
             PROVIDERS = load_providers()
             # Reset stats ทุก provider
             stats.clear()
-            self._json(200, {"status": "ok", "providers": len(PROVIDERS), "stats": "reset"})
+            self._json(
+                200, {"status": "ok", "providers": len(PROVIDERS), "stats": "reset"}
+            )
 
         elif self.path.startswith("/v1/rag/sessions"):
             self._json(200, {"sessions": list_sessions()})
@@ -1107,19 +1307,24 @@ class ProxyHandler(BaseHTTPRequestHandler):
         models = []
         for p in get_available_providers():
             for mid, mname in p["models"].items():
-                models.append({
-                    "id": f"{p['id']}/{mid}",
-                    "object": "model",
-                    "owned_by": p["name"],
-                    "provider": p["id"],
-                })
+                models.append(
+                    {
+                        "id": f"{p['id']}/{mid}",
+                        "object": "model",
+                        "owned_by": p["name"],
+                        "provider": p["id"],
+                    }
+                )
         # Add "auto" model
-        models.insert(0, {
-            "id": "auto",
-            "object": "model",
-            "owned_by": "SML AI Router",
-            "description": "อัตโนมัติ — เลือก provider ที่ดีที่สุด",
-        })
+        models.insert(
+            0,
+            {
+                "id": "auto",
+                "object": "model",
+                "owned_by": "SML AI Router",
+                "description": "อัตโนมัติ — เลือก provider ที่ดีที่สุด",
+            },
+        )
         self._json(200, {"object": "list", "data": models})
 
     def _handle_providers(self):
@@ -1132,18 +1337,25 @@ class ProxyHandler(BaseHTTPRequestHandler):
             if pid in cooldowns:
                 remaining = round(cooldowns[pid] - time.time())
                 if remaining > 0:
-                    cd = {"remaining": remaining, "until": datetime.fromtimestamp(cooldowns[pid]).strftime("%H:%M:%S")}
-            result.append({
-                "id": pid,
-                "name": p["name"],
-                "has_key": has_key,
-                "models": list(p["models"].keys()),
-                "default_model": p["default_model"],
-                "priority": p["priority"],
-                "stats": s,
-                "max_rpm": p["max_rpm"],
-                "cooldown": cd,
-            })
+                    cd = {
+                        "remaining": remaining,
+                        "until": datetime.fromtimestamp(cooldowns[pid]).strftime(
+                            "%H:%M:%S"
+                        ),
+                    }
+            result.append(
+                {
+                    "id": pid,
+                    "name": p["name"],
+                    "has_key": has_key,
+                    "models": list(p["models"].keys()),
+                    "default_model": p["default_model"],
+                    "priority": p["priority"],
+                    "stats": s,
+                    "max_rpm": p["max_rpm"],
+                    "cooldown": cd,
+                }
+            )
         self._json(200, {"providers": result})
 
     def _json(self, status, obj):
@@ -1174,10 +1386,15 @@ class ProxyHandler(BaseHTTPRequestHandler):
 
 # ==================== MAIN ====================
 
+
 def create_env_example():
     path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env.example")
     if not os.path.exists(path):
-        lines = ["# SML AI Router — API Keys", "# สมัครฟรีทุกที่! ดูวิธีที่ http://127.0.0.1:8899", ""]
+        lines = [
+            "# SML AI Router — API Keys",
+            "# สมัครฟรีทุกที่! ดูวิธีที่ http://127.0.0.1:8899",
+            "",
+        ]
         for pid, p in PROVIDERS.items():
             lines.append(f"# {p['name']}")
             lines.append(f"{p['env_key']}=")
@@ -1187,6 +1404,12 @@ def create_env_example():
 
 
 def main():
+    cfg = validate_or_exit("proxy")
+    global PROXY_HOST, PROXY_PORT, KEYS_FILE
+    PROXY_HOST = cfg.proxy_host
+    PROXY_PORT = cfg.proxy_port
+    KEYS_FILE = cfg.keys_file
+
     create_env_example()
     load_config()
 

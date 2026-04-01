@@ -8,13 +8,18 @@ import json
 import time
 import re
 import os
-from claude_brain import run_brain_full, get_recommendations, brain_logs as brain_live_logs
+from claude_brain import (
+    run_brain_full,
+    get_recommendations,
+    brain_logs as brain_live_logs,
+)
 import sys
 import threading
 from datetime import datetime
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.request import urlopen, Request
 from urllib.error import URLError, HTTPError
+from settings import validate_or_exit
 
 # Fix Windows encoding
 if sys.stdout.encoding != "utf-8":
@@ -31,6 +36,7 @@ live_logs = []  # log ล่าสุดสำหรับ dashboard
 is_scanning = False
 scan_thread = None
 
+
 def add_log(msg, level="info"):
     """เพิ่ม log + print ออก console"""
     entry = {
@@ -41,7 +47,14 @@ def add_log(msg, level="info"):
     live_logs.append(entry)
     if len(live_logs) > 500:
         live_logs.pop(0)
-    icon = {"info": "ℹ️", "ok": "✅", "warn": "⚠️", "error": "❌", "search": "🔍", "test": "🧪"}.get(level, "📌")
+    icon = {
+        "info": "ℹ️",
+        "ok": "✅",
+        "warn": "⚠️",
+        "error": "❌",
+        "search": "🔍",
+        "test": "🧪",
+    }.get(level, "📌")
     print(f"[{entry['time']}] {icon} {msg}")
 
 
@@ -77,7 +90,10 @@ KNOWN_SOURCES = [
         "api_base": "https://openrouter.ai/api/v1",
         "type": "chat",
         "free_tier": "มีโมเดลฟรี (ชื่อลงท้าย :free)",
-        "models": ["nvidia/nemotron-3-super-120b-a12b:free", "arcee-ai/trinity-mini:free"],
+        "models": [
+            "nvidia/nemotron-3-super-120b-a12b:free",
+            "arcee-ai/trinity-mini:free",
+        ],
         "signup_url": "https://openrouter.ai/settings/keys",
         "signup_steps": "1. สมัครที่ openrouter.ai\n2. ไป Settings > Keys\n3. กด Create Key\n4. Copy key (ขึ้นต้น sk-or-)",
         "key_prefix": "sk-or-",
@@ -211,11 +227,18 @@ def check_endpoint_alive(api_base):
 
 def test_chat(api_base, model, api_key=""):
     url = api_base.rstrip("/") + "/chat/completions"
-    payload = json.dumps({
-        "model": model,
-        "messages": [{"role": "user", "content": "Say hello in Thai. Reply in one short sentence."}],
-        "max_tokens": 100,
-    }).encode("utf-8")
+    payload = json.dumps(
+        {
+            "model": model,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": "Say hello in Thai. Reply in one short sentence.",
+                }
+            ],
+            "max_tokens": 100,
+        }
+    ).encode("utf-8")
     headers = {"Content-Type": "application/json", "User-Agent": "SML AI Router/1.0"}
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
@@ -228,11 +251,25 @@ def test_chat(api_base, model, api_key=""):
             content = ""
             if "choices" in body and body["choices"]:
                 content = body["choices"][0].get("message", {}).get("content", "")
-            return {"success": True, "latency_ms": round(latency * 1000), "response": content[:200], "status_code": resp.status}
+            return {
+                "success": True,
+                "latency_ms": round(latency * 1000),
+                "response": content[:200],
+                "status_code": resp.status,
+            }
     except HTTPError as e:
-        return {"success": False, "latency_ms": round((time.time()-start)*1000), "status_code": e.code, "error": f"HTTP {e.code}: {e.reason}"}
+        return {
+            "success": False,
+            "latency_ms": round((time.time() - start) * 1000),
+            "status_code": e.code,
+            "error": f"HTTP {e.code}: {e.reason}",
+        }
     except Exception as e:
-        return {"success": False, "latency_ms": round((time.time()-start)*1000), "error": str(e)[:200]}
+        return {
+            "success": False,
+            "latency_ms": round((time.time() - start) * 1000),
+            "error": str(e)[:200],
+        }
 
 
 def test_models_endpoint(api_base, api_key=""):
@@ -254,39 +291,64 @@ def calculate_score(chat_result, models_result):
     score = 0
     bd = {}
     if models_result.get("success"):
-        score += 20; bd["เข้าถึงได้"] = 20
+        score += 20
+        bd["เข้าถึงได้"] = 20
     else:
         bd["เข้าถึงได้"] = 0
     if chat_result.get("success"):
-        score += 30; bd["แชทได้"] = 30
+        score += 30
+        bd["แชทได้"] = 30
     elif chat_result.get("status_code") in (401, 403):
-        score += 10; bd["แชทได้"] = 10
+        score += 10
+        bd["แชทได้"] = 10
     else:
         bd["แชทได้"] = 0
     resp = chat_result.get("response", "")
     if len(resp) > 10:
-        score += 20; bd["คุณภาพคำตอบ"] = 20
+        score += 20
+        bd["คุณภาพคำตอบ"] = 20
     elif len(resp) > 0:
-        score += 10; bd["คุณภาพคำตอบ"] = 10
+        score += 10
+        bd["คุณภาพคำตอบ"] = 10
     else:
         bd["คุณภาพคำตอบ"] = 0
     lat = chat_result.get("latency_ms", 99999)
-    if lat < 1000: score += 15; bd["ความเร็ว"] = 15
-    elif lat < 3000: score += 10; bd["ความเร็ว"] = 10
-    elif lat < 10000: score += 5; bd["ความเร็ว"] = 5
-    else: bd["ความเร็ว"] = 0
+    if lat < 1000:
+        score += 15
+        bd["ความเร็ว"] = 15
+    elif lat < 3000:
+        score += 10
+        bd["ความเร็ว"] = 10
+    elif lat < 10000:
+        score += 5
+        bd["ความเร็ว"] = 5
+    else:
+        bd["ความเร็ว"] = 0
     mc = models_result.get("model_count", 0)
-    if mc >= 10: score += 15; bd["จำนวนโมเดล"] = 15
-    elif mc >= 5: score += 10; bd["จำนวนโมเดล"] = 10
-    elif mc >= 1: score += 5; bd["จำนวนโมเดล"] = 5
-    else: bd["จำนวนโมเดล"] = 0
+    if mc >= 10:
+        score += 15
+        bd["จำนวนโมเดล"] = 15
+    elif mc >= 5:
+        score += 10
+        bd["จำนวนโมเดล"] = 10
+    elif mc >= 1:
+        score += 5
+        bd["จำนวนโมเดล"] = 5
+    else:
+        bd["จำนวนโมเดล"] = 0
     grade = "F"
-    if score >= 90: grade = "A+"
-    elif score >= 80: grade = "A"
-    elif score >= 70: grade = "B"
-    elif score >= 60: grade = "C"
-    elif score >= 50: grade = "D"
-    elif score >= 30: grade = "E"
+    if score >= 90:
+        grade = "A+"
+    elif score >= 80:
+        grade = "A"
+    elif score >= 70:
+        grade = "B"
+    elif score >= 60:
+        grade = "C"
+    elif score >= 50:
+        grade = "D"
+    elif score >= 30:
+        grade = "E"
     return {"score": score, "grade": grade, "breakdown": bd}
 
 
@@ -297,7 +359,13 @@ def load_data():
                 return json.load(f)
         except Exception:
             pass
-    return {"known_apis": [], "discovered_apis": [], "github_repos": [], "social_posts": [], "test_results": []}
+    return {
+        "known_apis": [],
+        "discovered_apis": [],
+        "github_repos": [],
+        "social_posts": [],
+        "test_results": [],
+    }
 
 
 def save_data(data):
@@ -307,6 +375,7 @@ def save_data(data):
 
 
 # ==================== SCAN FUNCTIONS ====================
+
 
 def scan_known_sources():
     add_log("=" * 50, "info")
@@ -319,7 +388,9 @@ def scan_known_sources():
             add_log(f"  {src['name']} — ใช้ได้! (endpoint ตอบกลับ)", "ok")
         else:
             add_log(f"  {src['name']} — ล่มหรือไม่ตอบ", "error")
-        results.append({**src, "alive": alive, "checked_at": datetime.now().isoformat()})
+        results.append(
+            {**src, "alive": alive, "checked_at": datetime.now().isoformat()}
+        )
     alive_count = sum(1 for r in results if r.get("alive"))
     add_log(f"ผลรวม: {alive_count}/{len(results)} ใช้ได้", "ok")
     return results
@@ -332,7 +403,9 @@ def scan_github():
     found = []
     for q in queries:
         add_log(f"  ค้นหา GitHub: '{q}'...", "info")
-        url = f"https://api.github.com/search/repositories?q={q}&sort=updated&per_page=5"
+        url = (
+            f"https://api.github.com/search/repositories?q={q}&sort=updated&per_page=5"
+        )
         content = fetch_url(url, {"Accept": "application/vnd.github.v3+json"})
         if not content:
             add_log(f"  ไม่ได้รับข้อมูลจาก GitHub (อาจถูก rate limit)", "warn")
@@ -340,15 +413,20 @@ def scan_github():
         try:
             data = json.loads(content)
             for repo in data.get("items", []):
-                found.append({
-                    "source": "github",
-                    "name": repo["full_name"],
-                    "url": repo["html_url"],
-                    "description": repo.get("description", ""),
-                    "stars": repo.get("stargazers_count", 0),
-                    "updated": repo.get("updated_at", ""),
-                })
-                add_log(f"  พบ repo: {repo['full_name']} (⭐{repo.get('stargazers_count', 0)})", "ok")
+                found.append(
+                    {
+                        "source": "github",
+                        "name": repo["full_name"],
+                        "url": repo["html_url"],
+                        "description": repo.get("description", ""),
+                        "stars": repo.get("stargazers_count", 0),
+                        "updated": repo.get("updated_at", ""),
+                    }
+                )
+                add_log(
+                    f"  พบ repo: {repo['full_name']} (⭐{repo.get('stargazers_count', 0)})",
+                    "ok",
+                )
         except Exception:
             pass
         time.sleep(2)
@@ -382,16 +460,22 @@ def scan_social():
                 score = post.get("score", 0)
                 comments = post.get("num_comments", 0)
                 url_link = f"https://reddit.com{post.get('permalink', '')}"
-                created = datetime.fromtimestamp(post.get("created_utc", 0)).isoformat() if post.get("created_utc") else ""
-                posts.append({
-                    "source": f"Reddit r/{sub}",
-                    "title": title,
-                    "url": url_link,
-                    "score": score,
-                    "comments": comments,
-                    "created": created,
-                    "social_score": score + comments * 2,
-                })
+                created = (
+                    datetime.fromtimestamp(post.get("created_utc", 0)).isoformat()
+                    if post.get("created_utc")
+                    else ""
+                )
+                posts.append(
+                    {
+                        "source": f"Reddit r/{sub}",
+                        "title": title,
+                        "url": url_link,
+                        "score": score,
+                        "comments": comments,
+                        "created": created,
+                        "social_score": score + comments * 2,
+                    }
+                )
                 add_log(f"  Reddit: '{title[:60]}...' (⬆️{score} 💬{comments})", "ok")
         except Exception:
             pass
@@ -410,16 +494,20 @@ def scan_social():
                 title = hit.get("title", "")
                 points = hit.get("points", 0) or 0
                 comments = hit.get("num_comments", 0) or 0
-                url_link = f"https://news.ycombinator.com/item?id={hit.get('objectID', '')}"
-                posts.append({
-                    "source": "Hacker News",
-                    "title": title,
-                    "url": url_link,
-                    "score": points,
-                    "comments": comments,
-                    "created": hit.get("created_at", ""),
-                    "social_score": points + comments * 2,
-                })
+                url_link = (
+                    f"https://news.ycombinator.com/item?id={hit.get('objectID', '')}"
+                )
+                posts.append(
+                    {
+                        "source": "Hacker News",
+                        "title": title,
+                        "url": url_link,
+                        "score": points,
+                        "comments": comments,
+                        "created": hit.get("created_at", ""),
+                        "social_score": points + comments * 2,
+                    }
+                )
                 add_log(f"  HN: '{title[:60]}...' (⬆️{points} 💬{comments})", "ok")
         except Exception:
             pass
@@ -436,20 +524,26 @@ def scan_social():
             articles = json.loads(content)
             for art in articles:
                 title = art.get("title", "")
-                if not any(kw in title.lower() for kw in ["free", "api", "llm", "gpt", "open"]):
+                if not any(
+                    kw in title.lower() for kw in ["free", "api", "llm", "gpt", "open"]
+                ):
                     continue
                 reactions = art.get("positive_reactions_count", 0)
                 comments = art.get("comments_count", 0)
-                posts.append({
-                    "source": "Dev.to",
-                    "title": title,
-                    "url": art.get("url", ""),
-                    "score": reactions,
-                    "comments": comments,
-                    "created": art.get("published_at", ""),
-                    "social_score": reactions + comments * 2,
-                })
-                add_log(f"  Dev.to: '{title[:60]}...' (❤️{reactions} 💬{comments})", "ok")
+                posts.append(
+                    {
+                        "source": "Dev.to",
+                        "title": title,
+                        "url": art.get("url", ""),
+                        "score": reactions,
+                        "comments": comments,
+                        "created": art.get("published_at", ""),
+                        "social_score": reactions + comments * 2,
+                    }
+                )
+                add_log(
+                    f"  Dev.to: '{title[:60]}...' (❤️{reactions} 💬{comments})", "ok"
+                )
         except Exception:
             pass
         time.sleep(1)
@@ -491,19 +585,24 @@ def scan_test_apis(known):
                 add_log(f"  แชท: ❌ {err}", "error")
 
         sc = calculate_score(cr, mr)
-        add_log(f"  คะแนน: {sc['score']}/100 (เกรด {sc['grade']})", "ok" if sc["score"] >= 50 else "warn")
+        add_log(
+            f"  คะแนน: {sc['score']}/100 (เกรด {sc['grade']})",
+            "ok" if sc["score"] >= 50 else "warn",
+        )
 
-        results.append({
-            "name": name,
-            "api_base": api_base,
-            "tested_model": test_model,
-            "models_result": mr,
-            "chat_result": cr,
-            "scoring": sc,
-            "signup_url": api.get("signup_url", ""),
-            "signup_steps": api.get("signup_steps", ""),
-            "tested_at": datetime.now().isoformat(),
-        })
+        results.append(
+            {
+                "name": name,
+                "api_base": api_base,
+                "tested_model": test_model,
+                "models_result": mr,
+                "chat_result": cr,
+                "scoring": sc,
+                "signup_url": api.get("signup_url", ""),
+                "signup_steps": api.get("signup_steps", ""),
+                "tested_at": datetime.now().isoformat(),
+            }
+        )
         time.sleep(1)
 
     results.sort(key=lambda x: x.get("scoring", {}).get("score", 0), reverse=True)
@@ -533,7 +632,9 @@ def run_full_scan():
     existing_urls = {r["url"] for r in data.get("github_repos", [])}
     new_repos = [r for r in github if r["url"] not in existing_urls]
     data.setdefault("github_repos", []).extend(new_repos)
-    add_log(f"repos ใหม่: {len(new_repos)}, รวมทั้งหมด: {len(data['github_repos'])}", "info")
+    add_log(
+        f"repos ใหม่: {len(new_repos)}, รวมทั้งหมด: {len(data['github_repos'])}", "info"
+    )
 
     # 3) Social
     add_log("", "info")
@@ -560,7 +661,10 @@ def run_full_scan():
     add_log("=" * 50, "info")
     add_log("🎉 ค้นหาเสร็จสิ้น!", "ok")
     alive = sum(1 for k in known if k.get("alive"))
-    add_log(f"📊 สรุป: API ใช้ได้ {alive}/{len(known)}, GitHub repos {len(data['github_repos'])}, โพสต์โซเชียล {len(social)}", "ok")
+    add_log(
+        f"📊 สรุป: API ใช้ได้ {alive}/{len(known)}, GitHub repos {len(data['github_repos'])}, โพสต์โซเชียล {len(social)}",
+        "ok",
+    )
     add_log(f"📁 ข้อมูลบันทึกที่: {JSON_FILE}", "info")
     is_scanning = False
 
@@ -1432,14 +1536,17 @@ KILO_KIRO_INFO = """
 • สรุป: ถ้าต้องการ auto-free ใช้ OpenRouter + โมเดลที่ลงท้าย :free
 """
 
+
 def test_api_key(provider_name, api_base, api_key, model):
     """ทดสอบว่า API key ใช้งานได้จริงหรือไม่"""
     url = api_base.rstrip("/") + "/chat/completions"
-    payload = json.dumps({
-        "model": model,
-        "messages": [{"role": "user", "content": "Hi"}],
-        "max_tokens": 5,
-    }).encode("utf-8")
+    payload = json.dumps(
+        {
+            "model": model,
+            "messages": [{"role": "user", "content": "Hi"}],
+            "max_tokens": 5,
+        }
+    ).encode("utf-8")
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {api_key}",
@@ -1450,7 +1557,11 @@ def test_api_key(provider_name, api_base, api_key, model):
         req = Request(url, data=payload, headers=headers, method="POST")
         with urlopen(req, timeout=15) as resp:
             latency = round((time.time() - start) * 1000)
-            return {"status": "ok", "latency_ms": latency, "message": f"ใช้ได้! ({latency}ms)"}
+            return {
+                "status": "ok",
+                "latency_ms": latency,
+                "message": f"ใช้ได้! ({latency}ms)",
+            }
     except HTTPError as e:
         err_body = ""
         try:
@@ -1463,10 +1574,21 @@ def test_api_key(provider_name, api_base, api_key, model):
             return {"status": "invalid", "message": f"Key ไม่ถูกต้อง (HTTP 401)"}
         elif e.code == 400:
             # 400 = request format ไม่ถูก (เช่น Google API) แต่ key ใช้ได้
-            return {"status": "ok", "latency_ms": round((time.time()-start)*1000), "message": f"Key ใช้ได้ (API format ต่าง)"}
+            return {
+                "status": "ok",
+                "latency_ms": round((time.time() - start) * 1000),
+                "message": f"Key ใช้ได้ (API format ต่าง)",
+            }
         elif e.code == 403:
-            if "rate" in err_body.lower() or "limit" in err_body.lower() or "quota" in err_body.lower():
-                return {"status": "rate_limited", "message": "Key ใช้ได้ แต่ถึง rate limit/quota แล้ว"}
+            if (
+                "rate" in err_body.lower()
+                or "limit" in err_body.lower()
+                or "quota" in err_body.lower()
+            ):
+                return {
+                    "status": "rate_limited",
+                    "message": "Key ใช้ได้ แต่ถึง rate limit/quota แล้ว",
+                }
             return {"status": "invalid", "message": f"Key ถูกปฏิเสธ (HTTP 403)"}
         else:
             return {"status": "error", "message": f"HTTP {e.code}: {e.reason}"}
@@ -1475,6 +1597,7 @@ def test_api_key(provider_name, api_base, api_key, model):
 
 
 KEYS_JSON = os.path.join(os.path.dirname(os.path.abspath(__file__)), "api_keys.json")
+
 
 def load_api_keys():
     """โหลด API keys จาก api_keys.json"""
@@ -1494,9 +1617,11 @@ def load_api_keys():
                 keys[env_name] = val
     return keys
 
+
 def save_api_keys(keys):
     with open(KEYS_JSON, "w", encoding="utf-8") as f:
         json.dump(keys, f, indent=2, ensure_ascii=False)
+
 
 def test_all_keys():
     """ทดสอบ API key ทั้งหมดที่มี"""
@@ -1513,7 +1638,9 @@ def test_all_keys():
 
         if has_key:
             add_log(f"  ทดสอบ key {src['name']}...", "info")
-            test_result = test_api_key(src["name"], src["api_base"], key, src["models"][0])
+            test_result = test_api_key(
+                src["name"], src["api_base"], key, src["models"][0]
+            )
             status_msg = test_result["message"]
             if test_result["status"] == "ok":
                 add_log(f"  ✅ {src['name']}: {status_msg}", "ok")
@@ -1522,16 +1649,18 @@ def test_all_keys():
         else:
             add_log(f"  ⚪ {src['name']}: ยังไม่มี key", "info")
 
-        results.append({
-            "name": src["name"],
-            "env_name": env_name,
-            "has_key": has_key,
-            "key_prefix": key[:8] + "..." if has_key else "",
-            "test_result": test_result,
-            "auto_free_info": auto_free,
-            "signup_url": src.get("signup_url", ""),
-            "free_tier": src.get("free_tier", ""),
-        })
+        results.append(
+            {
+                "name": src["name"],
+                "env_name": env_name,
+                "has_key": has_key,
+                "key_prefix": key[:8] + "..." if has_key else "",
+                "test_result": test_result,
+                "auto_free_info": auto_free,
+                "signup_url": src.get("signup_url", ""),
+                "free_tier": src.get("free_tier", ""),
+            }
+        )
 
     # Save to data
     data = load_data()
@@ -1539,8 +1668,8 @@ def test_all_keys():
     data["kilo_kiro_info"] = KILO_KIRO_INFO
     save_data(data)
 
-    has = sum(1 for r in results if r['has_key'])
-    ok = sum(1 for r in results if (r.get('test_result') or {}).get('status') == 'ok')
+    has = sum(1 for r in results if r["has_key"])
+    ok = sum(1 for r in results if (r.get("test_result") or {}).get("status") == "ok")
     add_log(f"🔑 ทดสอบ key เสร็จ: {has} มี key, {ok} ใช้ได้", "ok")
     return results
 
@@ -1560,6 +1689,7 @@ class Handler(BaseHTTPRequestHandler):
             # ดึง proxy request log จาก proxy
             try:
                 from urllib.request import urlopen
+
                 with urlopen("http://127.0.0.1:8900/v1/logs", timeout=3) as r:
                     self._json(json.loads(r.read().decode("utf-8")))
             except Exception:
@@ -1593,22 +1723,30 @@ class Handler(BaseHTTPRequestHandler):
             if is_scanning:
                 self._json({"status": "busy"})
                 return
+
             def _test():
                 global is_scanning
                 is_scanning = True
-                try: test_all_keys()
-                finally: is_scanning = False
+                try:
+                    test_all_keys()
+                finally:
+                    is_scanning = False
+
             threading.Thread(target=_test, daemon=True).start()
             self._json({"status": "started"})
         elif self.path == "/api/brain":
             if is_scanning:
                 self._json({"status": "busy"})
                 return
+
             def _brain():
                 global is_scanning
                 is_scanning = True
-                try: run_brain_full()
-                finally: is_scanning = False
+                try:
+                    run_brain_full()
+                finally:
+                    is_scanning = False
+
             threading.Thread(target=_brain, daemon=True).start()
             self._json({"status": "started"})
         elif self.path == "/api/test-one-key":
@@ -1633,7 +1771,9 @@ class Handler(BaseHTTPRequestHandler):
                 if not src:
                     self._json({"status": "error", "message": "ไม่พบ provider"})
                     return
-                result = test_api_key(src["name"], src["api_base"], key, src["models"][0])
+                result = test_api_key(
+                    src["name"], src["api_base"], key, src["models"][0]
+                )
                 # ถ้าผ่าน (ok หรือ rate_limited) → save key ให้เลย
                 if new_key and result.get("status") in ("ok", "rate_limited"):
                     existing_keys[env_name] = new_key
@@ -1685,13 +1825,18 @@ class Handler(BaseHTTPRequestHandler):
             with open(path, "r", encoding="utf-8") as f:
                 self.wfile.write(f.read().encode("utf-8"))
         else:
-            self.wfile.write(b'{}')
+            self.wfile.write(b"{}")
 
     def log_message(self, format, *args):
         pass
 
 
 def main():
+    cfg = validate_or_exit("dashboard")
+    global HOST, PORT
+    HOST = cfg.dashboard_host
+    PORT = cfg.dashboard_port
+
     server = HTTPServer((HOST, PORT), Handler)
     print(f"🖥️  SML AI Router Dashboard")
     print(f"📍 http://{HOST}:{PORT}")
