@@ -3,7 +3,7 @@ status: passed
 phase: 01-architecture-reset-and-deployment-simplification
 source: [01-VERIFICATION.md]
 started: 2026-04-01T21:05:00+07:00
-updated: 2026-04-02T04:05:00+07:00
+updated: 2026-04-02T04:12:00+07:00
 ---
 
 ## Current Test
@@ -29,6 +29,7 @@ Domain routing follow-up on Coolify after commit `8dfe9dc` — `smlairouter` dom
 - Additional compose issue found: duplicated Traefik label key `traefik.http.routers.openclaw-http.rule` in `docker-compose.yml` (duplicate key can cause unpredictable router rule resolution).
 - Follow-up finding: setting `OPENCLAW_ARGS=--port=18789 --bind=lan` alone was not effective with current `ghcr.io/openclaw/openclaw:latest` image in Coolify (runtime still listened on loopback).
 - Follow-up finding #2: first command override attempt used `gateway` as first arg and failed with `Error: Cannot find module '/app/gateway'` because image entrypoint is `node` and expects script path first.
+- Follow-up finding #3: OpenClaw gateway now starts with correct script, but exits with `Gateway start blocked: set gateway.mode=local (current: unset)`.
 
 ### Fix applied in repo
 
@@ -39,6 +40,9 @@ Domain routing follow-up on Coolify after commit `8dfe9dc` — `smlairouter` dom
 - Added deterministic OpenClaw command override in `docker-compose.yml`:
   - `command: ["dist/index.js", "gateway", "--bind", "lan", "--port", "18789"]`
   - Reason: force bind mode directly at process startup using correct Node script invocation for this image.
+- Added startup guard bypass for fresh/uninitialized config state:
+  - `command: ["dist/index.js", "gateway", "--bind", "lan", "--port", "18789", "--allow-unconfigured"]`
+  - Reason: containerized first boot in this stack may not have `gateway.mode` initialized; this flag allows gateway startup without onboarding wizard.
 
 ### Required re-test (pending)
 

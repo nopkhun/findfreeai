@@ -67,7 +67,7 @@ services:
     user: "root"
     restart: unless-stopped
     # image ใช้ entrypoint เป็น node อยู่แล้ว จึงต้องส่ง dist/index.js เป็น arg ตัวแรก
-    command: ["dist/index.js", "gateway", "--bind", "lan", "--port", "18789"]
+    command: ["dist/index.js", "gateway", "--bind", "lan", "--port", "18789", "--allow-unconfigured"]
     volumes:
       - openclaw-data:/home/node/.openclaw
     environment:
