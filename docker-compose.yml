@@ -78,10 +78,18 @@ services:
       - FINDFREEAI_API_KEY=any
       # OpenRouter fallback (optional — smlairouter จัดการให้แล้ว)
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
-      # OpenClaw settings
+      # ── OpenClaw model: ใช้ OpenRouter แทน Anthropic โดยตรง ──
+      # (ต้องตั้ง OPENROUTER_API_KEY ใน Coolify)
+      # OpenRouter รองรับ Claude models ผ่าน Anthropic-compatible endpoint
+      - ANTHROPIC_API_KEY=${OPENROUTER_API_KEY:-${ANTHROPIC_API_KEY:-}}
+      - ANTHROPIC_BASE_URL=https://openrouter.ai/api
+      - OPENAI_API_BASE=http://smlairouter:8900/v1
+      # ── OpenClaw gateway settings ──
       - OPENCLAW_ALLOW_INSECURE_PRIVATE_WS=1
       - OPENCLAW_GATEWAY_CONTROLUI_DANGEROUSLYALLOWHOSTHEADERORIGINFALLBACK=true
-      - OPENCLAW_ARGS=--bind=lan --port=18789 --set gateway.mode=local
+      # แก้: ลบ --bind=lan ออก → OpenClaw จะ bind 0.0.0.0 (ทุก interface)
+      # เพื่อให้ nginx container เข้าถึงได้ผ่าน Docker network
+      - OPENCLAW_ARGS=--port=18789
     depends_on:
       smlairouter:
         condition: service_healthy
