@@ -23,6 +23,7 @@ services:
     restart: unless-stopped
     volumes:
       - smlairouter-data:/app/data
+      - smlairouter-logs:/app/logs
     environment:
       - PYTHONIOENCODING=utf-8
       - TZ=Asia/Bangkok
@@ -39,7 +40,7 @@ services:
       - DEEPINFRA_API_KEY=${DEEPINFRA_API_KEY:-}
       - COHERE_API_KEY=${COHERE_API_KEY:-}
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8900/', timeout=5)"]
+      test: ["CMD", "python", "-c", "import urllib.request,sys;sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8900/v1/models', timeout=5).status==200 else 1)"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -112,10 +113,11 @@ services:
       - traefik.enable=true
       # HTTP → HTTPS redirect
       - traefik.http.routers.openclaw-http.rule=Host(`${DOMAIN_OPENCLAW}`)
+      - traefik.http.routers.openclaw-http.rule=Host(`${DOMAIN_OPENCLAW:-openclaw.localhost}`)
       - traefik.http.routers.openclaw-http.entrypoints=http
       - traefik.http.routers.openclaw-http.middlewares=redirect-to-https
       # HTTPS
-      - traefik.http.routers.openclaw.rule=Host(`${DOMAIN_OPENCLAW}`)
+      - traefik.http.routers.openclaw.rule=Host(`${DOMAIN_OPENCLAW:-openclaw.localhost}`)
       - traefik.http.routers.openclaw.entrypoints=https
       - traefik.http.routers.openclaw.tls=true
       - traefik.http.routers.openclaw.tls.certresolver=letsencrypt
@@ -124,6 +126,7 @@ services:
 # ─── Named Volumes (persistent data) ──────────────────────
 volumes:
   smlairouter-data:   # ChromaDB, conversations, api_keys.json
+  smlairouter-logs:   # proxy logs และ health debug
   openclaw-data:      # OpenClaw config + workspace
 
 # ─── Networks ─────────────────────────────────────────────
