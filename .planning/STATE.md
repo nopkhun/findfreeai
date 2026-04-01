@@ -3,8 +3,8 @@
 ## Current Milestone
 
 - Active milestone: Project stabilization and deploy simplification.
-- Phase status: Phase 1 in progress (Plan 01 complete, 1/3 plans).
-- Current position: Completed `01-01-PLAN.md`; next target is `01-02-PLAN.md`.
+- Phase status: Phase 1 in progress (Plans 01-02 complete, 2/3 plans).
+- Current position: Completed `01-02-PLAN.md`; next target is `01-03-PLAN.md`.
 
 ## Decisions Log
 
@@ -15,6 +15,8 @@
 | 2026-04-01 | Use `docs/ARCHITECTURE.md` as canonical runtime source | Remove conflicting architecture guidance across docs and runtime paths |
 | 2026-04-01 | Validate config before proxy/dashboard bind ports | Enforce CONF-01/02 with single fail-fast contract and Thai diagnostics |
 | 2026-04-01 | Require staged secret scan command before commits | Enforce SEC-01 with tooling guardrail, not docs-only policy |
+| 2026-04-01 | Standardize local deploy via `scripts/run_local.py` | DEP-01 requires one deterministic local entrypoint with preflight |
+| 2026-04-01 | Unify restart/health/logs under `scripts/ops.py` | OPS-01 requires a single operational command family across modes |
 
 ## Risks
 
@@ -24,12 +26,12 @@
 
 ## Execution Metrics
 
-- Last completed plan: `01-01`
-- Duration: `6 min`
+- Last completed plan: `01-02`
+- Duration: `7 min`
 - Tasks completed: `3`
 - Files modified: `8`
 
 ## Next Actions
 
-- Execute `01-02-PLAN.md` (deployment/runbook/script unification).
+- Execute `01-03-PLAN.md` (dashboard and observability UX improvements).
 - Preserve centralized settings contract (`settings.py`) as single source of config truth.

@@ -12,10 +12,10 @@
 - [x] **SEC-01**: Project enforces safe secrets handling with no hardcoded credentials and clear excluded secret files.
 
 ### Deployment & Operations
-- [ ] **DEP-01**: Operator can run the system locally via a documented, repeatable command path and verify readiness.
-- [ ] **DEP-02**: Operator can run the system in Docker Compose with health checks and persistent data paths that survive restarts.
-- [ ] **DEP-03**: Operator can deploy on Coolify with explicit env/domain configuration and post-deploy verification steps.
-- [ ] **OPS-01**: Project provides operational scripts or commands for restart, health check, and log inspection across deployment modes.
+- [x] **DEP-01**: Operator can run the system locally via a documented, repeatable command path and verify readiness.
+- [x] **DEP-02**: Operator can run the system in Docker Compose with health checks and persistent data paths that survive restarts.
+- [x] **DEP-03**: Operator can deploy on Coolify with explicit env/domain configuration and post-deploy verification steps.
+- [x] **OPS-01**: Project provides operational scripts or commands for restart, health check, and log inspection across deployment modes.
 
 ### Dashboard & UX
 - [ ] **DASH-01**: Dashboard presents provider health, key configuration status, and critical warnings in a way that supports quick troubleshooting.

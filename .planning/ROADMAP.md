@@ -16,6 +16,8 @@
 
 ## Phase 1: Architecture Reset and Deployment Simplification
 
+**Progress:** 2/3 plans complete (`01-01`, `01-02`)
+
 ### Goal
 
 Deliver a simplified, production-usable SML AI Router that can be deployed and operated consistently in Local, Docker, and Coolify modes, while preserving OpenClaw compatibility and Thai-first operator experience.
