@@ -18,12 +18,12 @@
 - [x] **OPS-01**: Project provides operational scripts or commands for restart, health check, and log inspection across deployment modes.
 
 ### Dashboard & UX
-- [ ] **DASH-01**: Dashboard presents provider health, key configuration status, and critical warnings in a way that supports quick troubleshooting.
-- [ ] **DASH-02**: Dashboard and logs preserve Thai-first messaging policy for operator-facing text.
+- [x] **DASH-01**: Dashboard presents provider health, key configuration status, and critical warnings in a way that supports quick troubleshooting.
+- [x] **DASH-02**: Dashboard and logs preserve Thai-first messaging policy for operator-facing text.
 
 ### API Compatibility & Quality
-- [ ] **API-01**: Proxy preserves OpenAI-compatible chat completion behavior for OpenClaw integration (`/v1/chat/completions`, `/v1/models`).
-- [ ] **QUAL-01**: Project includes an executable verification checklist (or automated tests) that validates routing, provider fallback, and deployment readiness.
+- [x] **API-01**: Proxy preserves OpenAI-compatible chat completion behavior for OpenClaw integration (`/v1/chat/completions`, `/v1/models`).
+- [x] **QUAL-01**: Project includes an executable verification checklist (or automated tests) that validates routing, provider fallback, and deployment readiness.
 
 ## v2 Requirements (Deferred)
 
