@@ -514,7 +514,7 @@ def forward_chat_stream(body_bytes, handler, model_override="", request_headers=
         handler.send_header("Content-Type", "application/json")
         handler.end_headers()
         handler.wfile.write(
-            json.dumps({"error": {"message": "Invalid JSON"}}).encode("utf-8")
+            json.dumps({"error": {"message": "รูปแบบ JSON ไม่ถูกต้อง"}}).encode("utf-8")
         )
         return
 
@@ -847,7 +847,7 @@ def forward_chat_stream(body_bytes, handler, model_override="", request_headers=
     handler.send_header("Access-Control-Allow-Origin", "*")
     handler.end_headers()
     handler.wfile.write(
-        json.dumps({"error": {"message": "ทุก provider ล้มเหลว"}}).encode("utf-8")
+        json.dumps({"error": {"message": "ผู้ให้บริการทั้งหมดล้มเหลว"}}).encode("utf-8")
     )
 
 
@@ -859,7 +859,7 @@ def forward_chat(body_bytes, model_override="", request_headers=None):
     try:
         data = json.loads(body_bytes)
     except Exception:
-        return 400, json.dumps({"error": {"message": "Invalid JSON"}})
+        return 400, json.dumps({"error": {"message": "รูปแบบ JSON ไม่ถูกต้อง"}})
 
     original_model = model_override or data.get("model", "")
 
@@ -1216,7 +1216,7 @@ class ProxyHandler(BaseHTTPRequestHandler):
             self._json(200, session)
 
         else:
-            self._json(404, {"error": "not found"})
+            self._json(404, {"error": "ไม่พบปลายทางที่ร้องขอ"})
 
     def do_POST(self):
         cl = int(self.headers.get("Content-Length", 0))
@@ -1293,7 +1293,7 @@ class ProxyHandler(BaseHTTPRequestHandler):
                     toggle_key(data.get("id", ""), data.get("enabled", True))
                     self._json(200, {"status": "ok"})
                 else:
-                    self._json(400, {"error": f"unknown action: {action}"})
+                    self._json(400, {"error": f"ไม่รู้จักคำสั่ง action: {action}"})
             except Exception as e:
                 self._json(400, {"error": str(e)})
 
@@ -1301,7 +1301,7 @@ class ProxyHandler(BaseHTTPRequestHandler):
             self._json(200, {"status": "ok"})
 
         else:
-            self._json(404, {"error": "not found"})
+            self._json(404, {"error": "ไม่พบปลายทางที่ร้องขอ"})
 
     def _handle_models(self):
         models = []

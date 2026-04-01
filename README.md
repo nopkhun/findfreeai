@@ -166,6 +166,73 @@ openrouter/nvidia/nemotron-3-super-120b-a12b:free  → OpenRouter free model
 | GET | `/v1/logs` | Request logs (last 100) |
 | GET | `/v1/reload` | Reload providers + reset stats |
 
+### OpenAI Compatibility Examples (OpenClaw)
+
+#### 1) List models (`/v1/models`)
+
+Request:
+
+```bash
+curl -s http://127.0.0.1:8900/v1/models
+```
+
+Expected response shape (ตัวอย่าง):
+
+```json
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "auto",
+      "object": "model",
+      "owned_by": "SML AI Router"
+    }
+  ]
+}
+```
+
+#### 2) Chat completions non-stream (`/v1/chat/completions`)
+
+Request:
+
+```bash
+curl -s -X POST http://127.0.0.1:8900/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model":"auto","messages":[{"role":"user","content":"ทดสอบ"}]}'
+```
+
+Expected response shape (ตัวอย่าง):
+
+```json
+{
+  "id": "chatcmpl-...",
+  "object": "chat.completion",
+  "model": "...",
+  "choices": [
+    {
+      "index": 0,
+      "message": { "role": "assistant", "content": "..." },
+      "finish_reason": "stop"
+    }
+  ]
+}
+```
+
+#### 3) Chat completions stream (`stream=true`)
+
+Request:
+
+```bash
+curl -N -s -X POST http://127.0.0.1:8900/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model":"auto","stream":true,"messages":[{"role":"user","content":"ทดสอบสตรีม"}]}'
+```
+
+Expected stream shape:
+
+- มี event บรรทัดที่ขึ้นต้นด้วย `data:`
+- ปิดท้ายด้วย `data: [DONE]`
+
 ---
 
 ## 🤖 Providers (Free Tier)

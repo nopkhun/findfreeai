@@ -271,9 +271,9 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
 <div class="header">
   <h1>🔍 <span>SML AI Router</span> Dashboard</h1>
   <div class="header-right">
-    <span class="last-updated" id="lastUpdated">Loading...</span>
-    <span class="refresh-dot" title="Auto-refresh ทุก 15 วินาที"></span>
-    <div class="theme-toggle" onclick="toggleTheme()" title="Toggle Dark/Light"></div>
+    <span class="last-updated" id="lastUpdated">กำลังโหลด...</span>
+    <span class="refresh-dot" title="รีเฟรชอัตโนมัติทุก 15 วินาที"></span>
+    <div class="theme-toggle" onclick="toggleTheme()" title="สลับธีมมืด/สว่าง"></div>
   </div>
 </div>
 
@@ -525,7 +525,7 @@ print(response.choices[0].message.content)</pre>
     <div class="section">
       <div class="section-title">📋 บันทึกกิจกรรม</div>
       <div class="activity-log" id="activityLog">
-        <div class="log-entry"><span class="log-info">Waiting for data...</span></div>
+        <div class="log-entry"><span class="log-info">กำลังรอข้อมูล...</span></div>
       </div>
     </div>
   </div>
@@ -627,7 +627,7 @@ function renderData(data) {
   document.getElementById('testBadge').textContent = tests.length;
 
   if (data.last_updated) {
-    document.getElementById('lastUpdated').textContent = 'Updated: ' + new Date(data.last_updated).toLocaleString('th-TH');
+    document.getElementById('lastUpdated').textContent = 'อัปเดตล่าสุด: ' + new Date(data.last_updated).toLocaleString('th-TH');
   }
 
   // Top APIs (overview)
@@ -722,7 +722,7 @@ function renderKnownApis(known) {
   if (!known.length) return;
   tbody.innerHTML = known.map(api => {
     const sc = api.alive ? 'status-alive' : 'status-down';
-    const st = api.alive ? '✅ Alive' : '❌ Down';
+    const st = api.alive ? '✅ พร้อมใช้' : '❌ DOWN';
     const models = (api.models||[]).map(m => `<span class="tag">${esc(m)}</span>`).join('');
     const checked = api.checked_at ? new Date(api.checked_at).toLocaleTimeString('th-TH') : '-';
     return `<tr>
@@ -808,7 +808,7 @@ function renderActivityLog(data) {
   for (const k of known) {
     entries.push({
       time: k.checked_at,
-      msg: `${k.name}: ${k.alive ? 'Alive' : 'Down'}`,
+      msg: `${k.name}: ${k.alive ? 'พร้อมใช้' : 'ไม่พร้อมใช้'}`,
       type: k.alive ? 'ok' : 'fail'
     });
   }
@@ -848,12 +848,16 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         self.send_header("Cache-Control", "no-cache")
         self.end_headers()
         try:
-            json_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), JSON_FILE)
+            json_path = os.path.join(
+                os.path.dirname(os.path.abspath(__file__)), JSON_FILE
+            )
             if os.path.exists(json_path):
                 with open(json_path, "r", encoding="utf-8") as f:
                     self.wfile.write(f.read().encode("utf-8"))
             else:
-                self.wfile.write(b'{"known_apis":[],"discovered_apis":[],"github_repos":[],"test_results":[]}')
+                self.wfile.write(
+                    b'{"known_apis":[],"discovered_apis":[],"github_repos":[],"test_results":[]}'
+                )
         except Exception as e:
             self.wfile.write(json.dumps({"error": str(e)}).encode("utf-8"))
 
