@@ -88,9 +88,8 @@ services:
       # ── OpenClaw gateway settings ──
       - OPENCLAW_ALLOW_INSECURE_PRIVATE_WS=1
       - OPENCLAW_GATEWAY_CONTROLUI_DANGEROUSLYALLOWHOSTHEADERORIGINFALLBACK=true
-      # แก้: ลบ --bind=lan ออก → OpenClaw จะ bind 0.0.0.0 (ทุก interface)
-      # เพื่อให้ nginx container เข้าถึงได้ผ่าน Docker network
-      - OPENCLAW_ARGS=--port=18789
+      # ต้อง bind แบบ LAN เพื่อให้ nginx container เข้าถึง OpenClaw ผ่าน Docker network ได้
+      - OPENCLAW_ARGS=--port=18789 --bind=lan
     depends_on:
       smlairouter:
         condition: service_healthy
@@ -111,7 +110,6 @@ services:
     labels:
       - traefik.enable=true
       # HTTP → HTTPS redirect
-      - traefik.http.routers.openclaw-http.rule=Host(`${DOMAIN_OPENCLAW}`)
       - traefik.http.routers.openclaw-http.rule=Host(`${DOMAIN_OPENCLAW:-openclaw.localhost}`)
       - traefik.http.routers.openclaw-http.entrypoints=http
       - traefik.http.routers.openclaw-http.middlewares=redirect-to-https
