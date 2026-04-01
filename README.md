@@ -21,6 +21,8 @@ OpenAI-compatible AI proxy ที่ route requests ไปหลาย free prov
 
 ## 🏗️ Architecture
 
+Canonical architecture: docs/ARCHITECTURE.md
+
 ```
 ┌─ Docker (Coolify VPS) ─────────────────────────────────┐
 │                                                         │
